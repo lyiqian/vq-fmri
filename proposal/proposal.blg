@@ -1,0 +1,48 @@
+This is BibTeX, Version 0.99d (TeX Live 2023)
+Capacity: max_strings=200000, hash_size=200000, hash_prime=170003
+The top-level auxiliary file: proposal.aux
+The style file: plain.bst
+Database file #1: references.bib
+Warning--empty journal in chen2023rethinking
+You've used 2 entries,
+            2118 wiz_defined-function locations,
+            509 strings with 4354 characters,
+and the built_in function-call counts, 592 in all, are:
+= -- 53
+> -- 31
+< -- 0
++ -- 12
+- -- 10
+* -- 42
+:= -- 111
+add.period$ -- 6
+call.type$ -- 2
+change.case$ -- 11
+chr.to.int$ -- 0
+cite$ -- 3
+duplicate$ -- 21
+empty$ -- 43
+format.name$ -- 10
+if$ -- 115
+int.to.chr$ -- 0
+int.to.str$ -- 2
+missing$ -- 2
+newline$ -- 13
+num.names$ -- 4
+pop$ -- 11
+preamble$ -- 1
+purify$ -- 9
+quote$ -- 0
+skip$ -- 15
+stack$ -- 0
+substring$ -- 25
+swap$ -- 1
+text.length$ -- 0
+text.prefix$ -- 0
+top$ -- 0
+type$ -- 8
+warning$ -- 1
+while$ -- 5
+width$ -- 3
+write$ -- 22
+(There was 1 warning)

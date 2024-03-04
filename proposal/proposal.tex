@@ -1,0 +1,76 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage{geometry}
+\geometry{a4paper, margin=1in}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage[inline]{enumitem}
+
+
+\title{Project Proposal: Reproducibility Challenge \\ \large EECS 6322: Neural Networks and Deep Learning \\ Winter 2024}
+\author{Team Member Names: \\
+        Yiqian Liu - 220616470 \\
+        SeyedBahman Rouhani - 219509736}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\section*{Summary}
+The chosen paper is Rethinking Visual Reconstruction: Experience-Based Content CompletionGuided by Visual Cues by Chen et. al \cite{chen2023rethinking}.
+
+Reconstructing images from fMRI signals is a useful ability, however, extracting the seen image from recorded fMRI signals is usually hindered by limitations in different parts of the procedure: 
+\begin{enumerate*}
+  \item The human eye has a limited field of vision and different sensitivity of receptors inside that field of vision,
+  \item there are far less ganglion cells in the brain with respect to photoreceptor cells, which means the visual information will need to be compressed in the brain, also
+  \item the fMRI recording techniques are not perfect and may not preserve all brain activity information.
+\end{enumerate*}
+Due to these limitations, learning to reconstruct images from fMRI signals is not as easy as learning a mapping from signals to images. 
+
+This paper introduces VQ-fMRI. This method uses a VQ-VAE to learn a shared discrete representation between the images and the fMRI signals, which the decoder then learns to reconstruct the images from.
+The paper also introduces a self-supervised token-to-token inpainting network for visual content completion. This network leverages context and prior knowledge from the discrete latent space to infer uncertain or missing content.
+
+The papers results are significantly better than those of competing methods based on qualitative assessment and the two quantitive metrics used in the paper (One to one evaluation of reconstructed images based on \textit{SSIM}, \textit{PSNR} and \textit{PCC} and also a Pairwise Evaluation to check if the reconstructed image resembles the original image significantly more than a random image in dataset).
+ 
+% \section{Introduction}
+%Provide an overview of the project, including the motivation and the main goal of attempting to reproduce the results of the chosen paper.
+%
+%\section{Paper Selection}
+%Discuss how and why the specific paper was chosen, including details of the paper such as title, authors, and the conference it was published in.
+
+
+\section{Deep Learning Framework}
+To reproduce this method, we will use PyTorch framework.
+
+\section{Datasets}
+The paper conducts experiments and reports its results on Generic Object Decoding (GoD) dataset introduced by Horikawa and Kamitani \cite{horikawa2017generic}. The dataset is fMRI recordings of 5 subjects while looking at ImageNet dataset.
+
+\section{List of Experiments}
+There are two general experiments and an ablation study part in this paper. The main claim of the paper is denoted in the first experiment where they demonstrate the superiority of their model compared to other state of the art models. We will conduct this part of the experiment.
+
+\section{Compute Resources}
+The proposed network in the paper uses VQ-VAEs and U-NETs. The implementation details in the paper indicate that none of these networks are specifically large (most network have about 5 or 6 layers, and the initial image size is $500 \times 500$). What's more, the network is not trained end to end and training process contains several phases. Considering these, a NVIDIA GeForce GTX 1080 GPU should be enough for training the network.
+
+\section{Anticipated Separation of Work}
+ We divide expect the implementation to mainly included the following modules and subtasks, in front of each sub-task, the name of the team member expected to finish that part is written. 
+ \begin{enumerate}
+ 	\item Encoder-Decoders: Yiqian Liu 
+	\item U-Nets: Bahman Rouhani
+	\item Vector Quantization: Bahman Rouhani
+	\item Classifier: Yiqian Liu 
+	\item Codebook module: Bahman Rouhani
+	\item Data-loader: Yiqian Liu
+	\item Overall pipeline:
+	\begin{enumerate}
+		\item phase 1: Yiqian Liu
+		\item phase 2: Yiqian Liu  \& Bahman Rouhani
+		\item phase 3: Bahman Rouhani
+	\end{enumerate}
+ \end{enumerate}
+
+\section*{References}
+\bibliographystyle{plain}
+\bibliography{references}
+\end{document}

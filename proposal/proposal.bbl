@@ -1,0 +1,13 @@
+\begin{thebibliography}{1}
+
+\bibitem{chen2023rethinking}
+Jiaxuan Chen, Yu~Qi, and Gang Pan.
+\newblock Rethinking visual reconstruction: Experience-based content completion guided by visual cues.
+\newblock 2023.
+
+\bibitem{horikawa2017generic}
+Tomoyasu Horikawa and Yukiyasu Kamitani.
+\newblock Generic decoding of seen and imagined objects using hierarchical visual features.
+\newblock {\em Nature communications}, 8(1):15037, 2017.
+
+\end{thebibliography}
