@@ -1,3 +1,5 @@
+from data import FMRI, Image, ImageDataset
+
 ## data classes
 class SpatialFeats:
     pass
