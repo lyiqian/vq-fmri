@@ -1,6 +1,10 @@
+import abc
+
 from data import FMRI, Image, ImageDataset
 
-## data classes
+
+## intermediate data classes used by models below
+# maybe some of them could be native python dicts etc.
 class SpatialFeats:
     pass
 
@@ -17,88 +21,106 @@ class NoiseTable:
     pass
 
 
-class VisualTokens(SpatialTokens):
+class VisualCues(SpatialTokens):
     pass
 
 
-class EncodedVisualTokens:
+class EncodedVisualCues:
     pass
 
 
-## model classes
-class UNet:
-    pass  # TODO needed in 3? places
-
-
-class FMRIEncoder:
-    # TODO see p4 Discrete Visual Cues.
-    ...
-
-    def encode(fmri: FMRI) -> SpatialFeats:
+## model abstract classes
+class UNetAbc(abc.ABC):
+    @abc.abstractmethod
+    def transform(self, *args):
         pass
 
 
-class ImageEncoder:
-    def encode(img: Image) -> SpatialFeats:
+class FMRIEncoderAbc(abc.ABC):
+    @abc.abstractmethod
+    def encode(self, fmri: FMRI) -> SpatialFeats:
         pass
 
 
-class ImageDecoder:
-    def decode(SpatialTokens) -> Image:
+class ImageEncoderAbc(abc.ABC):
+    @abc.abstractmethod
+    def encode(self, img: Image) -> SpatialFeats:
         pass
 
 
-class VectorQuantizer:
-    def __init__(codebook: CodeBook):
-        pass
-
-    def quantize(spatial_feats: SpatialFeats) -> SpatialTokens:
-        pass
-
-
-class VqVae:
-    ImageEncoder
-    ImageDecoder
-    VectorQuantizer
-    CodeBook
-
-    def fit(ImageDataset):
-        pass
-
-    def quantize(spatial_feats: SpatialFeats) -> SpatialTokens:
-        pass
-
-    def encode(img: Image) -> SpatialTokens:
-        pass
-
-    def decode(spatial_tokens: SpatialTokens) -> Image:
+class ImageDecoderAbc(abc.ABC):
+    @abc.abstractmethod
+    def decode(self, spatial_tokens: SpatialTokens) -> Image:
         pass
 
 
-class TokenClassifier:
-    def fit(SpatialTokens, NoiseTable):
-        pass
+class VectorQuantizerAbc(abc.ABC):
+    def __init__(self, codebook: CodeBook):
+        self.codebook = codebook
 
-    def predict(SpatialTokens) -> NoiseTable:
-        pass
-
-
-class Denoiser:
-    TokenClassifier
-
-    def denoise(SpatialTokens) -> VisualTokens:
+    @abc.abstractmethod
+    def quantize(self, spatial_feats: SpatialFeats) -> SpatialTokens:
         pass
 
 
-class InpaintingEncoder:
-    def encode(vis_tokens: VisualTokens) -> EncodedVisualTokens:
+class VqVaeAbc(abc.ABC):
+    codebook: CodeBook
+    encoder_: ImageEncoderAbc = None
+    decoder_: ImageDecoderAbc = None
+    quantizer_: VectorQuantizerAbc = None
+        # trailing underscore indicates a variable is assigned after fitting
+
+    @abc.abstractmethod
+    def fit(self, img_dataset: ImageDataset):
+        pass
+
+    @abc.abstractmethod
+    def encode(self, img: Image) -> SpatialTokens:
+        pass
+
+    @abc.abstractmethod
+    def decode(self, spatial_tokens: SpatialTokens) -> Image:
+        pass
+
+    @abc.abstractmethod
+    def quantize(self, spatial_feats: SpatialFeats) -> SpatialTokens:
         pass
 
 
-class InpaintingDecoder:
-    def decode(EncodedVisualTokens) -> SpatialTokens:
+class TokenClassifierAbc(abc.ABC):
+
+    @abc.abstractmethod
+    def fit(self, spatial_tokens: SpatialTokens, noise_table: NoiseTable):
+        pass
+
+    @abc.abstractmethod
+    def predict(self, spatial_tokens: SpatialTokens) -> NoiseTable:
         pass
 
 
-class SuperResolution:
-    pass  # TODO figure 4
+class DenoiserAbc(abc.ABC):
+    token_clf: TokenClassifierAbc
+
+    @abc.abstractmethod
+    def denoise(self, spatial_tokens: SpatialTokens) -> VisualCues:
+        pass
+
+
+class InpaintingNetworkAbc(abc.ABC):
+    @abc.abstractmethod
+    def encode(self, vis_tokens: VisualCues) -> EncodedVisualCues:
+        pass
+
+    @abc.abstractmethod
+    def decode(self, encoded_vis_cues: EncodedVisualCues) -> SpatialTokens:
+        pass
+
+
+class SuperResolutionAbc(abc.ABC):
+    @abc.abstractmethod
+    def transform(self, spatial_tokens: SpatialTokens) -> SpatialTokens:
+        pass
+
+
+## model concrete classes
+# TODO either here or separate phases/pipeline module
