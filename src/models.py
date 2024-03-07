@@ -4,17 +4,20 @@ from data import FMRI, Image, ImageDataset
 
 
 ## intermediate data classes used by models below
-# maybe some of them could be native python dicts etc.
+# maybe some of them could just be native python dicts etc.
 class SpatialFeats:
-    pass
+    width: int
+    height: int
+    depth: int
 
 
 class CodeBook:
-    pass
+    depth: int
 
 
 class SpatialTokens:
-    pass
+    width: int
+    height: int
 
 
 class NoiseTable:
@@ -30,41 +33,39 @@ class EncodedVisualCues:
 
 
 ## model abstract classes
-class UNetAbc(abc.ABC):
+class UNetAbc(abc.ABC):  # TODO Bahman
     @abc.abstractmethod
     def transform(self, *args):
         pass
 
 
-class FMRIEncoderAbc(abc.ABC):
+class FMRIEncoderAbc(abc.ABC):  # TODO TBD
     @abc.abstractmethod
     def encode(self, fmri: FMRI) -> SpatialFeats:
         pass
 
 
-class ImageEncoderAbc(abc.ABC):
+class ImageEncoderAbc(abc.ABC):  # TODO Eason
     @abc.abstractmethod
     def encode(self, img: Image) -> SpatialFeats:
         pass
 
 
-class ImageDecoderAbc(abc.ABC):
+class ImageDecoderAbc(abc.ABC):  # TODO Eason
     @abc.abstractmethod
     def decode(self, spatial_tokens: SpatialTokens) -> Image:
         pass
 
 
-class VectorQuantizerAbc(abc.ABC):
-    def __init__(self, codebook: CodeBook):
-        self.codebook = codebook
+class VectorQuantizerAbc(abc.ABC):  # TODO Bahman
+    codebook_: CodeBook = None
 
     @abc.abstractmethod
     def quantize(self, spatial_feats: SpatialFeats) -> SpatialTokens:
         pass
 
 
-class VqVaeAbc(abc.ABC):
-    codebook: CodeBook
+class VqVaeAbc(abc.ABC):  # TODO Eason
     encoder_: ImageEncoderAbc = None
     decoder_: ImageDecoderAbc = None
     quantizer_: VectorQuantizerAbc = None
@@ -87,7 +88,7 @@ class VqVaeAbc(abc.ABC):
         pass
 
 
-class TokenClassifierAbc(abc.ABC):
+class TokenClassifierAbc(abc.ABC):  # TODO Eason
 
     @abc.abstractmethod
     def fit(self, spatial_tokens: SpatialTokens, noise_table: NoiseTable):
@@ -98,7 +99,7 @@ class TokenClassifierAbc(abc.ABC):
         pass
 
 
-class DenoiserAbc(abc.ABC):
+class DenoiserAbc(abc.ABC):  # TODO Eason
     token_clf: TokenClassifierAbc
 
     @abc.abstractmethod
@@ -106,7 +107,7 @@ class DenoiserAbc(abc.ABC):
         pass
 
 
-class InpaintingNetworkAbc(abc.ABC):
+class InpaintingNetworkAbc(abc.ABC):  # TODO Bahman
     @abc.abstractmethod
     def encode(self, vis_tokens: VisualCues) -> EncodedVisualCues:
         pass
@@ -116,11 +117,15 @@ class InpaintingNetworkAbc(abc.ABC):
         pass
 
 
-class SuperResolutionAbc(abc.ABC):
+class SuperResolutionAbc(abc.ABC):  # TODO Bahman
     @abc.abstractmethod
     def transform(self, spatial_tokens: SpatialTokens) -> SpatialTokens:
         pass
 
 
 ## model concrete classes
+
 # TODO either here or separate phases/pipeline module
+# - phase 1: VqVaeAbc
+# - phase 2: FMRIEncoderAbc
+# - phase 3: DenoiserAbc, InpaintingNetworkAbc
