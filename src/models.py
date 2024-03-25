@@ -2,10 +2,13 @@ import abc
 from data import FMRI, Image, ImageDataset
 
 # torch imports
-import torch.nn as nn 
-import torch 
+import torch.nn as nn
+import torch
 
 import torch.nn.functional as F
+
+from torchvision.transforms import functional as visionF
+
 
 ## intermediate data classes used by models below
 # maybe some of them could just be native python dicts etc.
@@ -73,7 +76,7 @@ class VqVaeAbc(abc.ABC):  # TODO Eason
     encoder_: ImageEncoderAbc = None
     decoder_: ImageDecoderAbc = None
     quantizer_: VectorQuantizerAbc = None
-        # trailing underscore indicates a variable is assigned after fitting
+    # trailing underscore indicates a variable is assigned after fitting
 
     @abc.abstractmethod
     def fit(self, img_dataset: ImageDataset):
@@ -111,7 +114,7 @@ class DenoiserAbc(abc.ABC):  # TODO Eason
         pass
 
 
-class InpaintingNetworkAbc(abc.ABC):  # TODO Bahman
+class InpaintingNetworkAbc(abc.ABC):  # Bahman
     @abc.abstractmethod
     def encode(self, vis_tokens: VisualCues) -> EncodedVisualCues:
         pass
@@ -136,13 +139,19 @@ class SuperResolutionAbc(abc.ABC):  # TODO Bahman
 
 
 class UNetConvBlock(nn.Module):
-    def __init__(self, in_channels, out_channels, kernel_size=4, stride=2, padding=1) -> None:
+    def __init__(
+        self, in_channels, out_channels, kernel_size=4, stride=2, padding=1
+    ) -> None:
         super().__init__()
-        self.conv_layer_1 = nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding)
+        self.conv_layer_1 = nn.Conv2d(
+            in_channels, out_channels, kernel_size, stride, padding
+        )
         self.batch_norm_1 = nn.BatchNorm2d(out_channels)
-        self.conv_layer_2 = nn.Conv2d(out_channels, out_channels, kernel_size, stride, padding)
+        self.conv_layer_2 = nn.Conv2d(
+            out_channels, out_channels, kernel_size, stride, padding
+        )
         self.batch_norm_2 = nn.BatchNorm2d(out_channels)
-    
+
     def forward(self, x):
         x = self.conv_layer_1(x)
         x = self.batch_norm_1(x)
@@ -151,10 +160,9 @@ class UNetConvBlock(nn.Module):
         x = self.batch_norm_2(x)
         x = nn.functional.relu(x)
         return x
-        
 
-## model abstract classes
-class UNet(nn.Module, UNetAbc):  # TODO Bahman
+
+class UNetEnc(nn.Module):
 
     def __init__(self, in_channels=8, out_channels=8) -> None:
         super().__init__()
@@ -162,51 +170,206 @@ class UNet(nn.Module, UNetAbc):  # TODO Bahman
         # a different formula. Change this if the results were not good!
         # ENCODER PART:
         # uncb_d: UNet Conv Block Down sampling
-        self.uncb_d_1 = UNetConvBlock(in_channels=in_channels, out_channels=in_channels*2, kernel_size=4, stride=2, padding=1)
+        self.uncb_d_1 = UNetConvBlock(
+            in_channels=in_channels,
+            out_channels=in_channels * 2,
+            kernel_size=4,
+            stride=2,
+            padding=1,
+        )
         self.down_sampling_1 = nn.MaxPool2d(2, 2)
-        self.uncb_d_2 = UNetConvBlock(in_channels=in_channels*2, out_channels=in_channels*4, kernel_size=4, stride=2, padding=1)
+        self.uncb_d_2 = UNetConvBlock(
+            in_channels=in_channels * 2,
+            out_channels=in_channels * 4,
+            kernel_size=4,
+            stride=2,
+            padding=1,
+        )
         self.down_sampling_2 = nn.MaxPool2d(2, 2)
-        # BOTTLENECK
-        self.bottleneck = UNetConvBlock(in_channels=in_channels*4, out_channels=in_channels*8, kernel_size=4, stride=2, padding=1)
-        # DECODER PART:
-        self.uncb_u_1 = UNetConvBlock(in_channels=in_channels*8, out_channels=in_channels*4, kernel_size=4, stride=2, padding=1)
-        self.up_sampling_1 = nn.ConvTranspose2d(in_channels=in_channels*8, out_channels=in_channels*4, kernel_size=2, stride=2)   
-        self.uncb_u_2 = UNetConvBlock(in_channels=in_channels*4, out_channels=in_channels*2, kernel_size=4, stride=2, padding=1)
-        self.up_sampling_2 = nn.ConvTranspose2d(in_channels=in_channels*4, out_channels=in_channels*2, kernel_size=2, stride=2)   
-        self.unary_conv = nn.Conv2d(in_channels=in_channels*2, out_channels=8, kernel_size=1)
-    
 
     def forward(self, x):
-        # TODO: I'm also not sure if people still use sigmoid as the last activation function for 
-        # UNets.
         uncb_d_1 = self.uncb_d_1(x)
         down_sampling_1 = self.down_sampling_1(uncb_d_1)
         uncb_d_2 = self.uncb_d_2(down_sampling_1)
         down_sampling_2 = self.down_sampling_2(uncb_d_2)
-        bottleneck = self.bottleneck(down_sampling_2)
-        uncb_u_1 = self.uncb_u_1(bottleneck)
-        uncb_u_1 = torch.cat(uncb_u_1, uncb_d_2)
-        up_sampling_1 = self.up_sampling_1(uncb_u_1)
-        uncb_u_2 = self.uncb_u_2(up_sampling_1)
-        uncb_u_2 = torch.cat(uncb_u_2, uncb_d_1)
-        up_sampling_2 = self.up_sampling_2(uncb_u_2)
-        unary_conv = torch.sigmoid(self.unary_conv(up_sampling_2))
+        resids = [uncb_d_1, uncb_d_2]
+        return down_sampling_2, resids
+
+
+class UNetDec(nn.Module):
+    def __init__(self, in_channels=8, out_channels=8) -> None:
+        super().__init__()
+        # DECODER PART:
+        self.uncb_u_1 = UNetConvBlock(
+            in_channels=in_channels * 8,
+            out_channels=in_channels * 4,
+            kernel_size=4,
+            stride=2,
+            padding=1,
+        )
+        self.up_sampling_1 = nn.ConvTranspose2d(
+            in_channels=in_channels * 8,
+            out_channels=in_channels * 4,
+            kernel_size=2,
+            stride=2,
+        )
+        self.uncb_u_2 = UNetConvBlock(
+            in_channels=in_channels * 4,
+            out_channels=in_channels * 2,
+            kernel_size=4,
+            stride=2,
+            padding=1,
+        )
+        self.up_sampling_2 = nn.ConvTranspose2d(
+            in_channels=in_channels * 4,
+            out_channels=in_channels * 2,
+            kernel_size=2,
+            stride=2,
+        )
+
+        def forward(self, x, resids):
+            uncb_d_1, uncb_d_2 = resids
+            uncb_u_1 = self.uncb_u_1(x)
+            uncb_u_1 = torch.cat(uncb_u_1, uncb_d_2)
+            up_sampling_1 = self.up_sampling_1(uncb_u_1)
+            uncb_u_2 = self.uncb_u_2(up_sampling_1)
+            uncb_u_2 = torch.cat(uncb_u_2, uncb_d_1)
+            up_sampling_2 = self.up_sampling_2(uncb_u_2)
+            return up_sampling_2
+
+
+class UNetDec2X(nn.Module):
+    """
+    Unet Decoder Used for super resolution, has one more upsampling layer!
+    TODO: might be able to write UNet more flexible so that we don't need a
+    separate module for different UNet sizes
+    """
+
+    def __init__(self, in_channels=8, out_channels=8) -> None:
+        super().__init__()
+        self.uncb_u_1 = UNetConvBlock(
+            in_channels=in_channels * 8,
+            out_channels=in_channels * 4,
+            kernel_size=4,
+            stride=2,
+            padding=1,
+        )
+        self.up_sampling_1 = nn.ConvTranspose2d(
+            in_channels=in_channels * 8,
+            out_channels=in_channels * 4,
+            kernel_size=2,
+            stride=2,
+        )
+        self.uncb_u_2 = UNetConvBlock(
+            in_channels=in_channels * 4,
+            out_channels=in_channels * 2,
+            kernel_size=4,
+            stride=2,
+            padding=1,
+        )
+        self.up_sampling_2 = nn.ConvTranspose2d(
+            in_channels=in_channels * 4,
+            out_channels=in_channels * 2,
+            kernel_size=2,
+            stride=2,
+        )
+        self.uncb_u_3 = UNetConvBlock(
+            in_channels=in_channels * 2,
+            out_channels=in_channels,
+            kernel_size=4,
+            stride=2,
+            padding=1,
+        )
+        self.up_sampling_3 = nn.ConvTranspose2d(
+            in_channels=in_channels * 1,
+            out_channels=in_channels,
+            kernel_size=2,
+            stride=2,
+        )
+
+        def forward(self, x, resids):
+            uncb_d_1, uncb_d_2 = resids
+            uncb_u_1 = self.uncb_u_1(x)
+            uncb_u_1 = torch.cat(uncb_u_1, uncb_d_2)
+            up_sampling_1 = self.up_sampling_1(uncb_u_1)
+            uncb_u_2 = self.uncb_u_2(up_sampling_1)
+            uncb_u_2 = torch.cat(uncb_u_2, uncb_d_1)
+            up_sampling_2 = self.up_sampling_2(uncb_u_2)
+            # X2 part:
+            uncb_u_3 = self.uncb_u_3(up_sampling_2)
+            uncb_u_3 = torch.cat(uncb_u_3, uncb_d_1)
+            up_sampling_3 = self.up_sampling_3(uncb_u_3)
+            return up_sampling_3
+
+
+class UNet(nn.Module, UNetAbc):  # Bahman
+
+    def __init__(self, in_channels=8, out_channels=8) -> None:
+        super().__init__()
+        self.enc = UNetEnc(in_channels=in_channels, out_channels=out_channels)
+        # BOTTLENECK
+        self.bottleneck = UNetConvBlock(
+            in_channels=in_channels * 4,
+            out_channels=in_channels * 8,
+            kernel_size=4,
+            stride=2,
+            padding=1,
+        )
+        self.dec = UNetDec(in_channels=in_channels, out_channels=out_channels)
+        self.unary_conv = nn.Conv2d(
+            in_channels=in_channels * 2, out_channels=out_channels, kernel_size=1
+        )
+
+    def forward(self, x):
+        # TODO: I'm also not sure if people still use sigmoid as the last activation function for
+        # UNets.
+        down_samped, uncb_d_1, uncb_d_2 = self.enc(x)
+        bottleneck = self.bottleneck(down_samped)
+        up_samped = self.dec(bottleneck, uncb_d_1, uncb_d_2)
+        unary_conv = torch.sigmoid(self.unary_conv(up_samped))
         return unary_conv
 
     def transform(self, *args):
         pass
-    
 
 
+## model abstract classes
+class SRNetwork(nn.Module, UNetAbc):  # Bahman
 
-class VectorQuantizer(nn.Module, VectorQuantizerAbc): 
+    def __init__(self, in_channels=8, out_channels=8) -> None:
+        super().__init__()
+        self.enc = UNetEnc(in_channels=in_channels, out_channels=out_channels)
+        # BOTTLENECK
+        self.bottleneck = UNetConvBlock(
+            in_channels=in_channels * 4,
+            out_channels=in_channels * 8,
+            kernel_size=4,
+            stride=2,
+            padding=1,
+        )
+        self.dec = UNetDec2X(in_channels=in_channels, out_channels=out_channels)
+        self.unary_conv = nn.Conv2d(
+            in_channels=in_channels * 2, out_channels=out_channels, kernel_size=1
+        )
+
+    def forward(self, x):
+        # TODO: I'm also not sure if people still use sigmoid as the last activation function for
+        # UNets.
+        down_samped, uncb_d_1, uncb_d_2 = self.enc(x)
+        bottleneck = self.bottleneck(down_samped)
+        up_samped = self.dec(bottleneck, uncb_d_1, uncb_d_2)
+        unary_conv = torch.sigmoid(self.unary_conv(up_samped))
+        return unary_conv
+
+
+class VectorQuantizer(nn.Module, VectorQuantizerAbc):
     """
-        Implemented based on this paper:
-            https://arxiv.org/abs/1711.00937.pdf
-        The graident part is supposed to be based on this paper, 
-        tho I implemented it based on what I gathered from the 
-        original paper.
-            https://arxiv.org/pdf/1308.3432.pdf
+    Implemented based on this paper:
+        https://arxiv.org/abs/1711.00937.pdf
+    The graident part is supposed to be based on this paper,
+    tho I implemented it based on what I gathered from the
+    original paper.
+        https://arxiv.org/pdf/1308.3432.pdf
     """
 
     def __init__(self, dim_encodings, num_encodings) -> None:
@@ -214,12 +377,14 @@ class VectorQuantizer(nn.Module, VectorQuantizerAbc):
         self.dim_encodings = dim_encodings
         self.num_encodings = num_encodings
         self.shape_encodings = [num_encodings, dim_encodings]
-        # In some implementations of VQ-VAE, there is a limit on the size of the initial value of the 
+        # In some implementations of VQ-VAE, there is a limit on the size of the initial value of the
         # codebook elements. Couldn't find a mention of this in the original paper, but it makes sense
         # since the 'volume' of codebook tensors are supposed to be limited.
         # https://github.com/airalcorn2/vqvae-pytorch/blob/021a7d79cbde845dd322bc0b97f37b08230d3cdc/vqvae.py#L173
-        self.lim_encodings = 3 ** 0.5 
-        self.codebook = torch.tensor(torch.rand(self.shape_encodings) * self.lim_encodings, requires_grad=True)
+        self.lim_encodings = 3**0.5
+        self.codebook = torch.tensor(
+            torch.rand(self.shape_encodings) * self.lim_encodings, requires_grad=True
+        )
 
     def forward(self, x):
         # x will have the shape B, D, W, H
@@ -234,20 +399,98 @@ class VectorQuantizer(nn.Module, VectorQuantizerAbc):
         encoding_indices = encoding_distances.argmin(dim=1)
         # encoding_indices.shape = B * H * W
         # replace every vector with its closest neighbour in the codebook:
-        encoding_quantized = F.embedding(encoding_indices.view(x.shape[0], x.shape[2:]), self.codebook)
+        encoding_quantized = F.embedding(
+            encoding_indices.view(x.shape[0], x.shape[2:]), self.codebook
+        )
         # Bring the D dimension back to idx 1:
         encoding_quantized = encoding_quantized.permute(0, 3, 1, 2)
         return encoding_quantized
-    
 
     def backward(self, grad_output):
         """
-            The https://arxiv.org/abs/1711.00937.pdf paper does straight through gradient estimator, 
-            for part 1 of the equation 3, the loss for the second part and the 3rd part will be calculated 
-            afterwards. 
+        The https://arxiv.org/abs/1711.00937.pdf paper does straight through gradient estimator,
+        for part 1 of the equation 3, the loss for the second part and the 3rd part will be calculated
+        afterwards.
         """
         gradinput = F.hardtanh(grad_output)
         return gradinput
 
     def quantize(self, spatial_feats: SpatialFeats) -> SpatialTokens:
         return self.forward(spatial_feats)
+
+
+class InpaintingNetwork(nn.Module, InpaintingNetworkAbc):  # Bahman
+
+    def __init__(self, dim_encodings) -> None:
+        super().__init__()
+        self.network = UNet(in_channels=dim_encodings, out_channels=dim_encodings)
+
+    def forward(self, x, corrupted_token_indexes):
+        # corrupted_token_indexes.shape = B, D, W, H (binary mask)
+        mask = torch.ones_like(x)
+        mask[corrupted_token_indexes] = 0
+        masked_tokens = x * mask
+        output = self.network(masked_tokens)
+        return output
+
+    def encode(self, vis_tokens: VisualCues) -> EncodedVisualCues:
+        pass
+
+    def decode(self, encoded_vis_cues: EncodedVisualCues) -> SpatialTokens:
+        pass
+
+
+class SuperResolutionModule(nn.Module, SuperResolutionAbc):  # Bahman
+
+    def __init__(
+        self,
+        fmri_encoder,
+        image_encoder_small,
+        image_encoder_large,
+        vector_quantizer_fmri,
+        vector_quantizer_img_small,
+        vector_quantizer_img_large,
+        token_classifier,
+        inpainting_network,
+        image_decoder_large,
+        resize_factor=2,
+        img_size=[224, 224],
+        dim_encodings = 8
+    ) -> None:
+        super().__init__()
+        self.resize_factor = resize_factor
+        self.img_size = img_size
+        self.down_scaled_size = [int(d) for d in img_size / resize_factor]
+        self.fmri_enc = fmri_encoder
+        self.img_enc_s = image_encoder_small
+        self.img_enc_l = image_encoder_large
+        self.img_dec_l = image_decoder_large
+        self.fmri_vq = vector_quantizer_fmri
+        self.img_vq_s = vector_quantizer_img_small
+        self.img_vq_l = vector_quantizer_img_large
+        self.token_classifier = token_classifier
+        self.inpainting_network = inpainting_network
+        self.sr = SRNetwork(in_channels=dim_encodings, out_channels=8)
+
+    def downsize_image(self, image):
+        visionF.resize(image, self.down_scaled_size)
+
+    def forward_train(self, y):
+        y_ds = self.downsize_image(y)
+        z_ds = self.img_vq_s(self.img_enc_s(y_ds))
+        z_sr = self.sr(z_ds)
+        z = self.img_vq_l(self.img_enc_l(y))
+        y_sr = self.img_dec_l(z_sr)
+        y = self.img_dec_l(z)
+        return y, z , y_sr, z_sr
+
+
+    def forward(self, x):
+        x_mismatches = self.token_classifier(x)
+        x_corrected = self.inpainting_network(x, x_mismatches)
+        x_sr = self.sr(x_corrected)
+        y_sr = self.img_dec_l(x_sr)
+        return y_sr
+
+    def transform(self, spatial_tokens: SpatialTokens) -> SpatialTokens:
+        pass
