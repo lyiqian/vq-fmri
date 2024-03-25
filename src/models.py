@@ -5,6 +5,7 @@ from data import FMRI, Image, ImageDataset
 import torch.nn as nn 
 import torch 
 
+import torch.nn.functional as F
 
 ## intermediate data classes used by models below
 # maybe some of them could just be native python dicts etc.
@@ -36,7 +37,7 @@ class EncodedVisualCues:
 
 
 ## model abstract classes
-class UNetAbc(abc.ABC):  # TODO Bahman
+class UNetAbc(abc.ABC):  # Bahman
     @abc.abstractmethod
     def transform(self, *args):
         pass
@@ -60,7 +61,7 @@ class ImageDecoderAbc(abc.ABC):  # TODO Eason
         pass
 
 
-class VectorQuantizerAbc(abc.ABC):  # TODO Bahman
+class VectorQuantizerAbc(abc.ABC):  # Bahman
     codebook_: CodeBook = None
 
     @abc.abstractmethod
@@ -196,3 +197,57 @@ class UNet(nn.Module, UNetAbc):  # TODO Bahman
         pass
     
 
+
+
+class VectorQuantizer(nn.Module, VectorQuantizerAbc): 
+    """
+        Implemented based on this paper:
+            https://arxiv.org/abs/1711.00937.pdf
+        The graident part is supposed to be based on this paper, 
+        tho I implemented it based on what I gathered from the 
+        original paper.
+            https://arxiv.org/pdf/1308.3432.pdf
+    """
+
+    def __init__(self, dim_encodings, num_encodings) -> None:
+        super().__init__()
+        self.dim_encodings = dim_encodings
+        self.num_encodings = num_encodings
+        self.shape_encodings = [num_encodings, dim_encodings]
+        # In some implementations of VQ-VAE, there is a limit on the size of the initial value of the 
+        # codebook elements. Couldn't find a mention of this in the original paper, but it makes sense
+        # since the 'volume' of codebook tensors are supposed to be limited.
+        # https://github.com/airalcorn2/vqvae-pytorch/blob/021a7d79cbde845dd322bc0b97f37b08230d3cdc/vqvae.py#L173
+        self.lim_encodings = 3 ** 0.5 
+        self.codebook = torch.tensor(torch.rand(self.shape_encodings) * self.lim_encodings, requires_grad=True)
+
+    def forward(self, x):
+        # x will have the shape B, D, W, H
+        # We will want to find the closest neighbours while keeping the dimension D:
+        flat_encodings = x.permute(0, 2, 3, 1).reshape(-1, self.dim_encodings)
+        # flat_Encodigns B * H * W, D
+        # clustering part:
+        # get pairwise distances:
+        encoding_distances = torch.cdist(flat_encodings, self.codebook)
+        # distances.shape = B * H * W, self.num_encodings
+        # find closest codebook vector for each encoding output
+        encoding_indices = encoding_distances.argmin(dim=1)
+        # encoding_indices.shape = B * H * W
+        # replace every vector with its closest neighbour in the codebook:
+        encoding_quantized = F.embedding(encoding_indices.view(x.shape[0], x.shape[2:]), self.codebook)
+        # Bring the D dimension back to idx 1:
+        encoding_quantized = encoding_quantized.permute(0, 3, 1, 2)
+        return encoding_quantized
+    
+
+    def backward(self, grad_output):
+        """
+            The https://arxiv.org/abs/1711.00937.pdf paper does straight through gradient estimator, 
+            for part 1 of the equation 3, the loss for the second part and the 3rd part will be calculated 
+            afterwards. 
+        """
+        gradinput = F.hardtanh(grad_output)
+        return gradinput
+
+    def quantize(self, spatial_feats: SpatialFeats) -> SpatialTokens:
+        return self.forward(spatial_feats)
