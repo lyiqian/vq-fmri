@@ -124,7 +124,7 @@ class InpaintingNetworkAbc(abc.ABC):  # Bahman
         pass
 
 
-class SuperResolutionAbc(abc.ABC):  # TODO Bahman
+class SuperResolutionAbc(abc.ABC):  # Bahman
     @abc.abstractmethod
     def transform(self, spatial_tokens: SpatialTokens) -> SpatialTokens:
         pass
@@ -404,7 +404,7 @@ class VectorQuantizer(nn.Module, VectorQuantizerAbc):
         )
         # Bring the D dimension back to idx 1:
         encoding_quantized = encoding_quantized.permute(0, 3, 1, 2)
-        return encoding_quantized
+        return encoding_quantized, encoding_indices.view(x.shape[0], -1)
 
     def backward(self, grad_output):
         """
@@ -414,6 +414,7 @@ class VectorQuantizer(nn.Module, VectorQuantizerAbc):
         """
         gradinput = F.hardtanh(grad_output)
         return gradinput
+    
 
     def quantize(self, spatial_feats: SpatialFeats) -> SpatialTokens:
         return self.forward(spatial_feats)
@@ -494,3 +495,19 @@ class SuperResolutionModule(nn.Module, SuperResolutionAbc):  # Bahman
 
     def transform(self, spatial_tokens: SpatialTokens) -> SpatialTokens:
         pass
+
+
+class TokenNoising(nn.Module):
+    
+    def __init__(self, noise_rate) -> None:
+        super().__init__()
+        self.noise_rate = noise_rate
+
+    def forward(self, x):
+        x_clone = x.clone().detach()
+        noise_mask = torch.bernoulli(torch.ones_like(x_clone) * (1 - self.noise_rate))
+        x_clone =  x_clone * noise_mask
+        return x_clone, noise_mask
+
+    def set_noise_rate(self, rate):
+        self.noise_rate = rate
