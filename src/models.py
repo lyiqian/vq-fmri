@@ -511,3 +511,19 @@ class TokenNoising(nn.Module):
 
     def set_noise_rate(self, rate):
         self.noise_rate = rate
+
+
+class VqVae(VqVaeAbc):
+    def fit(self, img_dataset: ImageDataset):
+        pass  # TODO should assign encoder_, decoder_, and quantizer_
+
+    def encode(self, img: Image) -> SpatialTokens:
+        spatial_feats = self.encoder_.encode(img)
+        spatial_tokens = self.quantize(spatial_feats)
+        return spatial_tokens
+
+    def decode(self, spatial_tokens: SpatialTokens) -> Image:
+        return self.decoder_.decode(spatial_tokens)
+
+    def quantize(self, spatial_feats: SpatialFeats) -> SpatialTokens:
+        return self.quantizer_.quantize(spatial_feats)
