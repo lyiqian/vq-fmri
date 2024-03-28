@@ -73,7 +73,7 @@ class VectorQuantizerAbc(abc.ABC):  # Bahman
         pass
 
 
-class VqVaeAbc(abc.ABC):  # TODO Eason
+class VqVaeAbc(abc.ABC):  # Eason
     encoder_: ImageEncoderAbc = None
     decoder_: ImageDecoderAbc = None
     quantizer_: VectorQuantizerAbc = None
