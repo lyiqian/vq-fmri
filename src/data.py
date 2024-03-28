@@ -59,6 +59,9 @@ class GODDataset(Dataset):
         return image, fmri
 
 
+class ImageDataset(Dataset):
+    pass
+
 
 class Image:
     pass
