@@ -641,3 +641,25 @@ class Denoiser(DenoiserAbc):
         noise_table = self.token_clf.predict(spatial_tokens)
         visual_cues = VisualCues(tokens=spatial_tokens, noise_table=noise_table)
         return visual_cues
+
+
+class TokenClassifier(TokenClassifierAbc, nn.Module):
+    """We implemented the image classifier ... using the UNet
+
+    with 2 downsampling and 2 upsampling layers ..."""
+
+    def __init__(self):
+        self.encoder = UNetEnc(in_channels=VqVae.CODEBOOK_DIM, out_channels=VqVae.CODEBOOK_DIM)
+        # TODO do we need a bottleneck here?
+        self.decoder = UNetDec(in_channels=VqVae.CODEBOOK_DIM, out_channels=1)  # True of False
+
+    def forward(self, x):
+        down_samped, uncb_d_1, uncb_d_2 = self.encoder(x)
+        x = self.decoder(down_samped, uncb_d_1, uncb_d_2)
+        return x
+
+    def fit(self, spatial_tokens: SpatialTokens, noise_table: NoiseTable):
+        pass
+
+    def predict(self, spatial_tokens: SpatialTokens) -> NoiseTable:
+        return self.forward(spatial_tokens)
