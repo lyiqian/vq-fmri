@@ -53,13 +53,13 @@ class FMRIEncoderAbc(abc.ABC):  # TODO TBD
         pass
 
 
-class ImageEncoderAbc(abc.ABC):  # TODO Eason
+class ImageEncoderAbc(abc.ABC):  # Eason
     @abc.abstractmethod
     def encode(self, img: Image) -> SpatialFeats:
         pass
 
 
-class ImageDecoderAbc(abc.ABC):  # TODO Eason
+class ImageDecoderAbc(abc.ABC):  # Eason
     @abc.abstractmethod
     def decode(self, spatial_tokens: SpatialTokens) -> Image:
         pass
@@ -566,6 +566,9 @@ class ImageEncoder(ImageEncoderAbc, nn.Module):
         x = self.res_block(x)
         return x
 
+    def encode(self, x):
+        return self.forward(x)
+
 
 class ImageDecoder(ImageDecoderAbc, nn.Module):
     def __init__(self, in_channels):
@@ -577,6 +580,9 @@ class ImageDecoder(ImageDecoderAbc, nn.Module):
         x = self.res_block(x)
         x = self.conv_block(x)
         return x
+
+    def decode(self, x):
+        return self.forward(x)
 
 
 class VqVae(VqVaeAbc):
