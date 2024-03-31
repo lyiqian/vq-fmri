@@ -32,8 +32,9 @@ class NoiseTable:
     pass
 
 
-class VisualCues(SpatialTokens):
-    pass
+class VisualCues:
+    tokens: SpatialTokens
+    noise_table: NoiseTable
 
 
 class EncodedVisualCues:
@@ -633,3 +634,10 @@ class VqVae(VqVaeAbc):
 
     def quantize(self, spatial_feats: SpatialFeats) -> SpatialTokens:
         return self.quantizer_.quantize(spatial_feats)
+
+
+class Denoiser(DenoiserAbc):
+    def denoise(self, spatial_tokens: SpatialTokens) -> VisualCues:
+        noise_table = self.token_clf.predict(spatial_tokens)
+        visual_cues = VisualCues(tokens=spatial_tokens, noise_table=noise_table)
+        return visual_cues
