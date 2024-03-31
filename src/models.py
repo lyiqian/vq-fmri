@@ -1,12 +1,13 @@
 import abc
+import itertools
+
 from data import FMRI, Image, ImageDataset
 
 # torch imports
-import torch.nn as nn
 import torch
-
+import torch.nn as nn
 import torch.nn.functional as F
-
+import torch.utils.data
 from torchvision.transforms import functional as visionF
 
 
@@ -72,7 +73,7 @@ class VectorQuantizerAbc(abc.ABC):  # Bahman
         pass
 
 
-class VqVaeAbc(abc.ABC):  # TODO Eason
+class VqVaeAbc(abc.ABC):  # Eason
     encoder_: ImageEncoderAbc = None
     decoder_: ImageDecoderAbc = None
     quantizer_: VectorQuantizerAbc = None
@@ -511,3 +512,58 @@ class TokenNoising(nn.Module):
 
     def set_noise_rate(self, rate):
         self.noise_rate = rate
+
+
+class ImageEncoder(ImageEncoderAbc, nn.Module):
+    pass  # TODO
+
+
+class ImageDecoder(ImageDecoderAbc, nn.Module):
+    pass  # TODO
+
+
+class VqVae(VqVaeAbc):
+    LR = 0.01
+    ENCODER_ALPHA = 0.25
+
+    def __init__(self) -> None:
+        self.encoder_ = ImageEncoder()
+        self.decoder_ = ImageDecoder()
+        self.quantizer_ = VectorQuantizer(dim_encodings=4, num_encodings=512)
+
+    def fit(self, img_dataset: ImageDataset):
+        loader = torch.utils.data.DataLoader(img_dataset, batch_size=32)
+
+        params = itertools.chain(
+            self.encoder_.parameters(),
+            self.quantizer_.parameters(),
+            self.decoder_.parameters())
+        optimizer = torch.optim.SGD(params, lr=self.LR)
+
+        for epoch in range(100):
+            print("Training Epoch", epoch)
+            for orig in loader:
+                spatial_feats = self.encoder_.encode(orig)
+                spatial_tokens, __ = self.quantizer_.quantize(spatial_feats)
+                reconstructed = self.decoder_.decode(spatial_tokens)
+
+                loss = (
+                    (reconstructed - orig).norm(2)
+                    + (spatial_feats.detach() - spatial_tokens).norm(2)
+                    + (spatial_tokens.detach() - spatial_feats).norm(2) * self.ENCODER_ALPHA
+                )
+                loss.backward()
+
+                optimizer.step()
+                optimizer.zero_grad()
+
+    def encode(self, img: Image) -> SpatialTokens:
+        spatial_feats = self.encoder_.encode(img)
+        spatial_tokens = self.quantize(spatial_feats)
+        return spatial_tokens
+
+    def decode(self, spatial_tokens: SpatialTokens) -> Image:
+        return self.decoder_.decode(spatial_tokens)
+
+    def quantize(self, spatial_feats: SpatialFeats) -> SpatialTokens:
+        return self.quantizer_.quantize(spatial_feats)
