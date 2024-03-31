@@ -53,13 +53,13 @@ class FMRIEncoderAbc(abc.ABC):  # TODO TBD
         pass
 
 
-class ImageEncoderAbc(abc.ABC):  # TODO Eason
+class ImageEncoderAbc(abc.ABC):  # Eason
     @abc.abstractmethod
     def encode(self, img: Image) -> SpatialFeats:
         pass
 
 
-class ImageDecoderAbc(abc.ABC):  # TODO Eason
+class ImageDecoderAbc(abc.ABC):  # Eason
     @abc.abstractmethod
     def decode(self, spatial_tokens: SpatialTokens) -> Image:
         pass
@@ -514,22 +514,88 @@ class TokenNoising(nn.Module):
         self.noise_rate = rate
 
 
+class ResBlock(nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super(ResBlock, self).__init__()
+        self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1)
+        self.relu = nn.ReLU(inplace=True)
+        self.conv2 = nn.Conv2d(out_channels, out_channels, kernel_size=1)
+        self.relu = nn.ReLU(inplace=True)
+
+    def forward(self, x):
+        residual = x
+        out = self.conv1(x)
+        out = self.relu(out)
+
+        out = self.conv2(out)
+        out = self.relu(out)
+
+        out += residual
+        out = F.relu(out)
+        return out
+
+
+EncoderConvBlock = UNetConvBlock
+
+class DecoderConvBlock(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.conv_t_1 = nn.ConvTranspose2d(3, 3, kernel_size=4, stride=2, padding=1)
+        self.batch_norm_1 = nn.BatchNorm2d(3)
+        self.conv_t_2 = nn.ConvTranspose2d(3, 3, kernel_size=4, stride=2, padding=1)
+        self.batch_norm_2 = nn.BatchNorm2d(3)
+
+    def forward(self, x):
+        x = self.conv_t_1(x)
+        x = self.batch_norm_1(x)
+        x = F.relu(x)
+        x = self.conv_t_2(x)
+        x = self.batch_norm_2(x)
+        x = F.relu(x)
+        return x
+
+
 class ImageEncoder(ImageEncoderAbc, nn.Module):
-    pass  # TODO
+    def __init__(self, out_channels) -> None:
+        super().__init__()
+        self.conv_block = EncoderConvBlock(3, 3, kernel_size=4, stride=2, padding=1)
+        self.res_block = ResBlock(3, out_channels)
+
+    def forward(self, x):
+        x = self.conv_block(x)
+        x = self.res_block(x)
+        return x
+
+    def encode(self, x):
+        return self.forward(x)
 
 
 class ImageDecoder(ImageDecoderAbc, nn.Module):
-    pass  # TODO
+    def __init__(self, in_channels):
+        super().__init__()
+        self.res_block = ResBlock(in_channels, 3)
+        self.conv_block = DecoderConvBlock()
+
+    def forward(self, x):
+        x = self.res_block(x)
+        x = self.conv_block(x)
+        return x
+
+    def decode(self, x):
+        return self.forward(x)
 
 
 class VqVae(VqVaeAbc):
-    LR = 0.01
+    CODEBOOK_DIM = 8
+    CODEBOOK_SIZE = 128
+
+    LR = 2e-4
     ENCODER_ALPHA = 0.25
 
     def __init__(self) -> None:
-        self.encoder_ = ImageEncoder()
-        self.decoder_ = ImageDecoder()
-        self.quantizer_ = VectorQuantizer(dim_encodings=4, num_encodings=512)
+        self.encoder_ = ImageEncoder(self.CODEBOOK_DIM)
+        self.decoder_ = ImageDecoder(self.CODEBOOK_DIM)
+        self.quantizer_ = VectorQuantizer(dim_encodings=self.CODEBOOK_DIM, num_encodings=self.CODEBOOK_SIZE)
 
     def fit(self, img_dataset: ImageDataset):
         loader = torch.utils.data.DataLoader(img_dataset, batch_size=32)
@@ -538,7 +604,7 @@ class VqVae(VqVaeAbc):
             self.encoder_.parameters(),
             self.quantizer_.parameters(),
             self.decoder_.parameters())
-        optimizer = torch.optim.SGD(params, lr=self.LR)
+        optimizer = torch.optim.Adam(params, lr=self.LR)
 
         for epoch in range(100):
             print("Training Epoch", epoch)
