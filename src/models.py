@@ -682,8 +682,24 @@ class TokenClassifier(TokenClassifierAbc, nn.Module):
 class MLP(nn.Module):
     """.. through 2 hidden layers outputs a feature map z_*^x
     (constrained to be the same size as the z^y)."""
-    # TODO determine output layer n neurons and reshape them
-    pass
+    # IN_SHAPE = (3, 256, 256)  # TODO TBD by fMRI data shape
+    # OUT_SHAPE = (VqVae.CODEBOOK_DIM, 16, 16)  # TODO by VqVae encoder out
+
+    def __init__(self, in_width, in_height, in_depth, out_width):
+        super().__init__()
+
+        self.in_dims = in_width * in_height * in_depth
+        self.out_width = out_width  # assuming squares
+        self.out_dims = VqVae.CODEBOOK_DIM * self.out_width**2
+
+        self.fc1 = nn.Linear(self.in_dims, self.out_dims)
+        self.fc2 = nn.Linear(self.out_dims, self.out_dims)
+
+    def forward(self, x):
+        x = x.view(-1, self.in_dims)
+        x = self.fc1(x)
+        x = self.fc2(x)
+        return x.view(-1, VqVae.CODEBOOK_DIM, self.out_width, self.out_width)
 
 
 class FMRIEncoder(FMRIEncoderAbc, nn.Module):
