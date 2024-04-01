@@ -651,13 +651,10 @@ class TokenClassifier(TokenClassifierAbc, nn.Module):
     LR = 1e-4  # TODO TBD
 
     def __init__(self):
-        self.encoder = UNetEnc(in_channels=VqVae.CODEBOOK_DIM, out_channels=VqVae.CODEBOOK_DIM)
-        # TODO do we need a bottleneck here?
-        self.decoder = UNetDec(in_channels=VqVae.CODEBOOK_DIM, out_channels=1)  # True of False
+        self.unet= UNet(in_channels=VqVae.CODEBOOK_DIM, out_channels=1)  # True/False in NoiseTable
 
     def forward(self, x):
-        down_samped, uncb_d_1, uncb_d_2 = self.encoder(x)
-        x = self.decoder(down_samped, uncb_d_1, uncb_d_2)
+        x = self.unet(x)
         return x
 
     def fit(self, spatial_tokens: SpatialTokens, noise_table: NoiseTable):
