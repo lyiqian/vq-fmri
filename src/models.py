@@ -677,3 +677,25 @@ class TokenClassifier(TokenClassifierAbc, nn.Module):
 
     def predict(self, spatial_tokens: SpatialTokens) -> NoiseTable:
         return self.forward(spatial_tokens)
+
+
+class MLP(nn.Module):
+    """.. through 2 hidden layers outputs a feature map z_*^x
+    (constrained to be the same size as the z^y)."""
+    # TODO determine output layer n neurons and reshape them
+    pass
+
+
+class FMRIEncoder(FMRIEncoderAbc, nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.mlp = MLP()
+        self.unet = UNet(in_channels=VqVae.CODEBOOK_DIM, out_channels=VqVae.CODEBOOK_DIM)
+
+    def forward(self, x):
+        x = self.mlp(x)
+        x = self.unet(x)
+        return x
+
+    def encode(self, fmri: FMRI) -> SpatialFeats:
+        return self.forward(fmri)
