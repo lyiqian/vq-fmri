@@ -32,8 +32,9 @@ class NoiseTable:
     pass
 
 
-class VisualCues(SpatialTokens):
-    pass
+class VisualCues:
+    tokens: SpatialTokens
+    noise_table: NoiseTable
 
 
 class EncodedVisualCues:
@@ -96,7 +97,7 @@ class VqVaeAbc(abc.ABC):  # Eason
         pass
 
 
-class TokenClassifierAbc(abc.ABC):  # TODO Eason
+class TokenClassifierAbc(abc.ABC):  # Eason
 
     @abc.abstractmethod
     def fit(self, spatial_tokens: SpatialTokens, noise_table: NoiseTable):
@@ -107,7 +108,7 @@ class TokenClassifierAbc(abc.ABC):  # TODO Eason
         pass
 
 
-class DenoiserAbc(abc.ABC):  # TODO Eason
+class DenoiserAbc(abc.ABC):  # Eason
     token_clf: TokenClassifierAbc
 
     @abc.abstractmethod
@@ -633,3 +634,49 @@ class VqVae(VqVaeAbc):
 
     def quantize(self, spatial_feats: SpatialFeats) -> SpatialTokens:
         return self.quantizer_.quantize(spatial_feats)
+
+
+class Denoiser(DenoiserAbc):
+    def denoise(self, spatial_tokens: SpatialTokens) -> VisualCues:
+        noise_table = self.token_clf.predict(spatial_tokens)
+        visual_cues = VisualCues(tokens=spatial_tokens, noise_table=noise_table)
+        return visual_cues
+
+
+class TokenClassifier(TokenClassifierAbc, nn.Module):
+    """We implemented the image classifier ... using the UNet
+
+    with 2 downsampling and 2 upsampling layers ..."""
+
+    LR = 1e-4  # TODO TBD
+
+    def __init__(self):
+        self.encoder = UNetEnc(in_channels=VqVae.CODEBOOK_DIM, out_channels=VqVae.CODEBOOK_DIM)
+        # TODO do we need a bottleneck here?
+        self.decoder = UNetDec(in_channels=VqVae.CODEBOOK_DIM, out_channels=1)  # True of False
+
+    def forward(self, x):
+        down_samped, uncb_d_1, uncb_d_2 = self.encoder(x)
+        x = self.decoder(down_samped, uncb_d_1, uncb_d_2)
+        return x
+
+    def fit(self, spatial_tokens: SpatialTokens, noise_table: NoiseTable):
+        loader = torch.utils.data.DataLoader(
+            torch.utils.data.TensorDataset(spatial_tokens, noise_table),
+            batch_size=32)
+
+        loss_fn = torch.nn.BCELoss()
+        optimizer = torch.optim.Adam(self.parameters(), lr=self.LR)
+
+        for epoch in range(100):
+            print("Training epoch", epoch)
+            for tokens, noise in loader:
+                pred = self.forward(tokens)
+                loss = loss_fn(pred, noise)
+
+                loss.backward()
+                optimizer.step()
+                optimizer.zero_grad()
+
+    def predict(self, spatial_tokens: SpatialTokens) -> NoiseTable:
+        return self.forward(spatial_tokens)
