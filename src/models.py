@@ -48,7 +48,7 @@ class UNetAbc(abc.ABC):  # Bahman
         pass
 
 
-class FMRIEncoderAbc(abc.ABC):  # TODO TBD
+class FMRIEncoderAbc(abc.ABC):  # Eason
     @abc.abstractmethod
     def encode(self, fmri: FMRI) -> SpatialFeats:
         pass
@@ -651,13 +651,10 @@ class TokenClassifier(TokenClassifierAbc, nn.Module):
     LR = 1e-4  # TODO TBD
 
     def __init__(self):
-        self.encoder = UNetEnc(in_channels=VqVae.CODEBOOK_DIM, out_channels=VqVae.CODEBOOK_DIM)
-        # TODO do we need a bottleneck here?
-        self.decoder = UNetDec(in_channels=VqVae.CODEBOOK_DIM, out_channels=1)  # True of False
+        self.unet= UNet(in_channels=VqVae.CODEBOOK_DIM, out_channels=1)  # True/False in NoiseTable
 
     def forward(self, x):
-        down_samped, uncb_d_1, uncb_d_2 = self.encoder(x)
-        x = self.decoder(down_samped, uncb_d_1, uncb_d_2)
+        x = self.unet(x)
         return x
 
     def fit(self, spatial_tokens: SpatialTokens, noise_table: NoiseTable):
@@ -680,3 +677,39 @@ class TokenClassifier(TokenClassifierAbc, nn.Module):
 
     def predict(self, spatial_tokens: SpatialTokens) -> NoiseTable:
         return self.forward(spatial_tokens)
+
+
+class MLP(nn.Module):
+    """.. through 2 hidden layers outputs a feature map z_*^x
+    (constrained to be the same size as the z^y)."""
+
+    def __init__(self, in_dims, out_width):
+        super().__init__()
+
+        self.in_dims = in_dims
+        self.out_width = out_width  # assuming squares
+        self.out_dims = VqVae.CODEBOOK_DIM * self.out_width**2
+
+        self.fc1 = nn.Linear(self.in_dims, self.out_dims)
+        self.fc2 = nn.Linear(self.out_dims, self.out_dims)
+
+    def forward(self, x):
+        x = x.view(-1, self.in_dims)
+        x = self.fc1(x)
+        x = self.fc2(x)
+        return x.view(-1, VqVae.CODEBOOK_DIM, self.out_width, self.out_width)
+
+
+class FMRIEncoder(FMRIEncoderAbc, nn.Module):
+    def __init__(self, in_dims, out_width):
+        super().__init__()
+        self.mlp = MLP(in_dims, out_width)
+        self.unet = UNet(in_channels=VqVae.CODEBOOK_DIM, out_channels=VqVae.CODEBOOK_DIM)
+
+    def forward(self, x):
+        x = self.mlp(x)
+        x = self.unet(x)
+        return x
+
+    def encode(self, fmri: FMRI) -> SpatialFeats:
+        return self.forward(fmri)
