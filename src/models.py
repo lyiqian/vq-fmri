@@ -48,7 +48,7 @@ class UNetAbc(abc.ABC):  # Bahman
         pass
 
 
-class FMRIEncoderAbc(abc.ABC):  # TODO TBD
+class FMRIEncoderAbc(abc.ABC):  # Eason
     @abc.abstractmethod
     def encode(self, fmri: FMRI) -> SpatialFeats:
         pass
@@ -682,13 +682,11 @@ class TokenClassifier(TokenClassifierAbc, nn.Module):
 class MLP(nn.Module):
     """.. through 2 hidden layers outputs a feature map z_*^x
     (constrained to be the same size as the z^y)."""
-    # IN_SHAPE = (3, 256, 256)  # TODO TBD by fMRI data shape
-    # OUT_SHAPE = (VqVae.CODEBOOK_DIM, 16, 16)  # TODO by VqVae encoder out
 
-    def __init__(self, in_width, in_height, in_depth, out_width):
+    def __init__(self, in_dims, out_width):
         super().__init__()
 
-        self.in_dims = in_width * in_height * in_depth
+        self.in_dims = in_dims
         self.out_width = out_width  # assuming squares
         self.out_dims = VqVae.CODEBOOK_DIM * self.out_width**2
 
@@ -703,9 +701,9 @@ class MLP(nn.Module):
 
 
 class FMRIEncoder(FMRIEncoderAbc, nn.Module):
-    def __init__(self):
+    def __init__(self, in_dims, out_width):
         super().__init__()
-        self.mlp = MLP()
+        self.mlp = MLP(in_dims, out_width)
         self.unet = UNet(in_channels=VqVae.CODEBOOK_DIM, out_channels=VqVae.CODEBOOK_DIM)
 
     def forward(self, x):
