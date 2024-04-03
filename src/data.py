@@ -48,12 +48,15 @@ class GODDataset(Dataset):
         self.image_transforms = image_transforms
 
     def __len__(self):
-        return len(self.img_labels)
+        return len(self.img_ids)
 
     def __getitem__(self, idx):
         img_path = str(self.data_dir / 'images' / self.split / self.image_paths[idx])
-        print(img_path)
         image = read_image(img_path)
+
+        if image.shape == (1, 500, 500):
+            image = torch.concat([image]*3)
+
         fmri = self.fmri_data_all[idx]
         if self.image_transforms:
             image = self.image_transforms(image)
