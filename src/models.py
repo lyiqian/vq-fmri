@@ -402,7 +402,7 @@ class VectorQuantizer(nn.Module, VectorQuantizerAbc):
         # encoding_indices.shape = B * H * W
         # replace every vector with its closest neighbour in the codebook:
         encoding_quantized = F.embedding(
-            encoding_indices.view(x.shape[0], x.shape[2:]), self.codebook
+            encoding_indices.view(x.shape[0], x.shape[2], x.shape[3]), self.codebook
         )
         # Bring the D dimension back to idx 1:
         encoding_quantized = encoding_quantized.permute(0, 3, 1, 2)
