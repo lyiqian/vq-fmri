@@ -57,8 +57,8 @@ def train_phase1(
 def train_phase2(
     train_loader,
     epochs,
-    vq_vae: VqVaeAbc,
     fmri_encoder: FMRIEncoderAbc,
+    trained_vq_vae: VqVaeAbc,
 ):
     optimizer = torch.optim.Adam(fmri_encoder.parameters(), lr=2e-4)
 
@@ -67,8 +67,8 @@ def train_phase2(
             optimizer.zero_grad()
 
             fmri_feats = fmri_encoder(fmris)
-            fmri_tokens, fmri_codebook_idxs = vq_vae.quantize(fmri_feats)
-            img_tokens, img_codebook_idxs = vq_vae.encode(images)
+            fmri_tokens, fmri_codebook_idxs = trained_vq_vae.quantize(fmri_feats)
+            img_tokens, img_codebook_idxs = trained_vq_vae.encode(images)
             loss = lossVQ(fmri_feats, fmri_codebook_idxs, img_tokens, img_codebook_idxs)
 
             loss.backward()
