@@ -703,7 +703,7 @@ class TokenClassifier(TokenClassifierAbc, nn.Module):
 
     with 2 downsampling and 2 upsampling layers ..."""
 
-    LR = 1e-4  # TODO TBD
+    LR = 2e-4
 
     def __init__(self):
         super().__init__()
