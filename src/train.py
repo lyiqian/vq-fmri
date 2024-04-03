@@ -1,6 +1,6 @@
 import torch
 
-from models import TokenNoising, ImageEncoder, ImageDecoder, VectorQuantizer, TokenClassifier, InpaintingNetwork, VqVae, VqVaeAbc, FMRIEncoderAbc
+from models import TokenNoising, ImageEncoder, ImageDecoder, VectorQuantizer, TokenClassifier, InpaintingNetwork, VqVae, VqVaeAbc, FMRIEncoderAbc, UNet
 from losses import lossVQ, lossVQ_MSE
 from torch.nn import CrossEntropyLoss
 
@@ -22,7 +22,7 @@ def train_phase1(
 ):
     # TODO: noise rate should be set same as error rate in fMRI, we should look up what that value is!
     # TODO: Maybe increasing the noise rate gradually would be beneficial?
-
+    # torch.autograd.set_detect_anomaly(True)
 
     params = itertools.chain(
         vq_vae.encoder_.parameters(),
@@ -30,19 +30,19 @@ def train_phase1(
         vq_vae.decoder_.parameters())
     optimizer = torch.optim.Adam(params, lr=vq_vae.LR)    
 
-    for epoch in range(epochs):
-        for i, (images, _) in enumerate(train_loader):
-            optimizer.zero_grad()
-            # VQVQE part:
-            # Encode image
-            # Learn Codebook
-            # Quantize encodigns
-            img_encs = vq_vae.encoder_.encode(images)
-            img_encs_q, img_encs_idxs = vq_vae.quantizer_.quantize(img_encs)
-            img_rec = vq_vae.decoder_.decode(img_encs_q)
-            code_book_loss = lossVQ(images, img_rec, img_encs, img_encs_q, beta)
-            code_book_loss.backward()
-            optimizer.step()
+    # for epoch in range(epochs):
+    #     for i, (images, _) in enumerate(train_loader):
+    #         optimizer.zero_grad()
+    #         # VQVQE part:
+    #         # Encode image
+    #         # Learn Codebook
+    #         # Quantize encodigns
+    #         img_encs = vq_vae.encoder_.encode(images)
+    #         img_encs_q, img_encs_idxs = vq_vae.quantizer_.quantize(img_encs)
+    #         img_rec = vq_vae.decoder_.decode(img_encs_q)
+    #         code_book_loss = lossVQ(images, img_rec, img_encs, img_encs_q, beta)
+    #         code_book_loss.backward()
+    #         optimizer.step()
 
     # Train Token Classifier
     # Train Token Inpaingting
@@ -57,13 +57,14 @@ def train_phase1(
         for i, (images, _) in enumerate(train_loader):
             token_classifier_optimizer.zero_grad()
             token_inpainting_optimizer.zero_grad()
-            img_encs_q = vq_vae.encode(images)
+            img_encs_q, img_encs_idxs = vq_vae.encode(images)
             noisy_encs, noise_mask = tk(img_encs_q)
             enc_idx_preds = token_classifier(noisy_encs)
             enc_val_preds = token_inpainting(noisy_encs, noise_mask)
             with torch.no_grad():
                 _, env_val_preds_q_idxs = vq_vae.quantizer_.quantize(enc_val_preds)
             idx_pred_loss = ce_loss(enc_idx_preds, noise_mask)
+            # TODO: double check inputs of this loss:
             val_pred_loss = lossVQ_MSE(
                 z_x=enc_val_preds,
                 z_x_q_idxs=env_val_preds_q_idxs,
@@ -110,7 +111,8 @@ def train_general():
     test_loader = None
     epochs = 2
     vq_vqe = VqVae()
-    token_classifier = TokenClassifier()
+    # token_classifier = TokenClassifier()
+    token_classifier = UNet()
     token_inpainting = InpaintingNetwork(8)
     beta = 2
     train_phase1(train_loader=train_loader, validation_loader=validation_loader,test_loader=test_loader, epochs=epochs,

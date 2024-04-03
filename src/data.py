@@ -55,10 +55,13 @@ class GODDataset(Dataset):
 
     def __getitem__(self, idx):
         img_path = str(self.data_dir / 'images' / self.split / self.image_paths[idx])
-        image = read_image(img_path)
+        # image = read_image(img_path)
+        image = Image.open(img_path)
 
-        if image.shape == (1, 500, 500):
-            image = torch.concat([image]*3)
+        num_channels = len(image.getbands())
+        if num_channels == 1:
+            # image = torch.concat([image]*3)
+            image = image.convert('RGB')
 
         fmri = self.fmri_data_all[idx]
         if self.image_transforms:
@@ -68,7 +71,7 @@ class GODDataset(Dataset):
 class GODLoader():
     def __init__(self, data_dir, batch_size=16) -> None:
         image_transforms = transforms.Compose([
-            transforms.Resize((32, 32)),      # Resize the image to 256x256 pixels
+            transforms.Resize((512, 512)),      # Resize the image to 256x256 pixels
             transforms.ToTensor(),              # Convert the image to a PyTorch tensor
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),  # Normalize with ImageNet stats
         ])

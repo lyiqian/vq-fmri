@@ -180,10 +180,12 @@ class UNetEnc(nn.Module):
             padding=1,
         )
         self.down_sampling_1 = nn.MaxPool2d(2, 2)
+        # HACK: this is not based on the actual paper, the second convolution should also have kernel size 4
         self.uncb_d_2 = UNetConvBlock(
             in_channels=in_channels * 2,
             out_channels=in_channels * 4,
-            kernel_size=4,
+            # kernel_size=4,
+            kernel_size=2,
             stride=2,
             padding=1,
         )
@@ -191,10 +193,15 @@ class UNetEnc(nn.Module):
 
     def forward(self, x):
         uncb_d_1 = self.uncb_d_1(x)
+        print(uncb_d_1.shape)
         down_sampling_1 = self.down_sampling_1(uncb_d_1)
+        print(down_sampling_1.shape)
         uncb_d_2 = self.uncb_d_2(down_sampling_1)
+        print(uncb_d_2.shape)
         down_sampling_2 = self.down_sampling_2(uncb_d_2)
+        print(down_sampling_2.shape)
         resids = [uncb_d_1, uncb_d_2]
+        # print(resids.shape)
         return down_sampling_2, resids
 
 
@@ -229,15 +236,15 @@ class UNetDec(nn.Module):
             stride=2,
         )
 
-        def forward(self, x, resids):
-            uncb_d_1, uncb_d_2 = resids
-            uncb_u_1 = self.uncb_u_1(x)
-            uncb_u_1 = torch.cat(uncb_u_1, uncb_d_2)
-            up_sampling_1 = self.up_sampling_1(uncb_u_1)
-            uncb_u_2 = self.uncb_u_2(up_sampling_1)
-            uncb_u_2 = torch.cat(uncb_u_2, uncb_d_1)
-            up_sampling_2 = self.up_sampling_2(uncb_u_2)
-            return up_sampling_2
+    def forward(self, x, resids):
+        uncb_d_1, uncb_d_2 = resids
+        uncb_u_1 = self.uncb_u_1(x)
+        uncb_u_1 = torch.cat(uncb_u_1, uncb_d_2)
+        up_sampling_1 = self.up_sampling_1(uncb_u_1)
+        uncb_u_2 = self.uncb_u_2(up_sampling_1)
+        uncb_u_2 = torch.cat(uncb_u_2, uncb_d_1)
+        up_sampling_2 = self.up_sampling_2(uncb_u_2)
+        return up_sampling_2
 
 
 class UNetDec2X(nn.Module):
@@ -325,9 +332,9 @@ class UNet(nn.Module, UNetAbc):  # Bahman
     def forward(self, x):
         # TODO: I'm also not sure if people still use sigmoid as the last activation function for
         # UNets.
-        down_samped, uncb_d_1, uncb_d_2 = self.enc(x)
+        down_samped, [uncb_d_1, uncb_d_2] = self.enc(x)
         bottleneck = self.bottleneck(down_samped)
-        up_samped = self.dec(bottleneck, uncb_d_1, uncb_d_2)
+        up_samped = self.dec(bottleneck, [uncb_d_1, uncb_d_2])
         unary_conv = torch.sigmoid(self.unary_conv(up_samped))
         return unary_conv
 
@@ -402,7 +409,7 @@ class VectorQuantizer(nn.Module, VectorQuantizerAbc):
         # encoding_indices.shape = B * H * W
         # replace every vector with its closest neighbour in the codebook:
         encoding_quantized = F.embedding(
-            encoding_indices.view(x.shape[0], x.shape[2], x.shape[3]), self.codebook
+            encoding_indices.view(x.shape[0], *x.shape[2:]), self.codebook
         )
         # Bring the D dimension back to idx 1:
         encoding_quantized = encoding_quantized.permute(0, 3, 1, 2)
@@ -513,7 +520,6 @@ class TokenNoising(nn.Module):
 
     def set_noise_rate(self, rate):
         self.noise_rate = rate
-
 
 class ResBlock(nn.Module):
     def __init__(self, in_channels, res_channels):
@@ -627,8 +633,8 @@ class VqVae(VqVaeAbc):
 
     def encode(self, img) -> SpatialTokens:
         spatial_feats = self.encoder_.encode(img)
-        spatial_tokens = self.quantize(spatial_feats)
-        return spatial_tokens
+        spatial_tokens, token_indices = self.quantize(spatial_feats)
+        return spatial_tokens, token_indices
 
     def decode(self, spatial_tokens: SpatialTokens) -> ImNetImage:
         return self.decoder_.decode(spatial_tokens)
@@ -655,11 +661,20 @@ class TokenClassifier(TokenClassifierAbc, nn.Module):
         super().__init__()
         self.encoder = UNetEnc(in_channels=VqVae.CODEBOOK_DIM, out_channels=VqVae.CODEBOOK_DIM)
         # TODO do we need a bottleneck here?
-        self.decoder = UNetDec(in_channels=VqVae.CODEBOOK_DIM, out_channels=1)  # True of False
+        # Note by Bahman: We do, because decoder expects in_channels * 8 input channels but encoder only provides in_channels * 4
+        # self.bottleneck = UNetConvBlock(
+        #     in_channels=VqVae.CODEBOOK_DIM * 4,
+        #     out_channels=VqVae.CODEBOOK_DIM * 8,
+        #     kernel_size=4,
+        #     stride=2,
+        #     padding=1,
+        # )
+        self.decoder = UNetDec(in_channels=VqVae.CODEBOOK_DIM * 2, out_channels=1)  # True of False
 
     def forward(self, x):
-        down_samped, uncb_d_1, uncb_d_2 = self.encoder(x)
-        x = self.decoder(down_samped, uncb_d_1, uncb_d_2)
+        down_samped, [uncb_d_1, uncb_d_2] = self.encoder(x)
+        bn_out = self.bottleneck(down_samped)
+        x = self.decoder(bn_out, [uncb_d_1, uncb_d_2])
         return x
 
     def fit(self, spatial_tokens: SpatialTokens, noise_table: NoiseTable):
