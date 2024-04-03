@@ -539,9 +539,9 @@ class ResBlock(nn.Module):
 EncoderConvBlock = UNetConvBlock
 
 class DecoderConvBlock(nn.Module):
-    def __init__(self):
+    def __init__(self, in_channels):
         super().__init__()
-        self.conv_t_1 = nn.ConvTranspose2d(3, 3, kernel_size=4, stride=2, padding=1)
+        self.conv_t_1 = nn.ConvTranspose2d(in_channels, 3, kernel_size=4, stride=2, padding=1)
         self.batch_norm_1 = nn.BatchNorm2d(3)
         self.conv_t_2 = nn.ConvTranspose2d(3, 3, kernel_size=4, stride=2, padding=1)
         self.batch_norm_2 = nn.BatchNorm2d(3)
@@ -559,8 +559,8 @@ class DecoderConvBlock(nn.Module):
 class ImageEncoder(ImageEncoderAbc, nn.Module):
     def __init__(self, out_channels) -> None:
         super().__init__()
-        self.conv_block = EncoderConvBlock(3, 3, kernel_size=4, stride=2, padding=1)
-        self.res_block = ResBlock(3, out_channels)
+        self.conv_block = EncoderConvBlock(3, out_channels, kernel_size=4, stride=2, padding=1)
+        self.res_block = ResBlock(out_channels, out_channels)
 
     def forward(self, x):
         x = self.conv_block(x)
@@ -574,8 +574,8 @@ class ImageEncoder(ImageEncoderAbc, nn.Module):
 class ImageDecoder(ImageDecoderAbc, nn.Module):
     def __init__(self, in_channels):
         super().__init__()
-        self.res_block = ResBlock(in_channels, 3)
-        self.conv_block = DecoderConvBlock()
+        self.res_block = ResBlock(in_channels, in_channels)
+        self.conv_block = DecoderConvBlock(in_channels)
 
     def forward(self, x):
         x = self.res_block(x)
@@ -691,12 +691,16 @@ class MLP(nn.Module):
         self.out_dims = VqVae.CODEBOOK_DIM * self.out_width**2
 
         self.fc1 = nn.Linear(self.in_dims, self.out_dims)
+        self.relu1 = nn.ReLU()
         self.fc2 = nn.Linear(self.out_dims, self.out_dims)
+        self.relu2 = nn.ReLU()
 
     def forward(self, x):
         x = x.view(-1, self.in_dims)
         x = self.fc1(x)
+        x = self.relu1(x)
         x = self.fc2(x)
+        x = self.relu2(x)
         return x.view(-1, VqVae.CODEBOOK_DIM, self.out_width, self.out_width)
 
 
