@@ -10,4 +10,6 @@ def standardize(img_tsr):
     img_tsr = tvf.resize(img_tsr, (STANDARD_SIZE, STANDARD_SIZE))
     if img_tsr.shape[0] == 1:
         img_tsr = torch.concat([img_tsr]*3)
+    if img_tsr.shape[0] == 4:
+        img_tsr = img_tsr[:3]
     return img_tsr.float()/255
