@@ -64,7 +64,36 @@ class GODDataset(Dataset):
 
 
 class ImageDataset(Dataset):
-    pass
+    """The 'train_cls' set of ImageNet containing 1.2M images.
+
+    Also supports 'test' and 'val' sets."""
+    def __init__(self, data_dir, image_transforms, split='train') -> None:
+        self.data_dir = Path(data_dir)
+        self.split = split
+        self.image_transforms = image_transforms
+
+        df_basepath = self.data_dir / 'ImageSets' / 'CLS-LOC'
+        df_fname = f'{split}_cls.txt' if split == 'train' else f'{split}.txt'
+        self.img_info = (
+            pd.read_csv(df_basepath/df_fname, header=None, sep=' ')
+                .assign(path=lambda df: df[0].apply(self._format_img_path))
+                .set_index(1)
+        )
+
+    def __len__(self):
+        return len(self.img_info)
+
+    def __getitem__(self, idx):
+        img_path = self.img_info.at[idx+1, 'path']
+        image = read_image(img_path)
+
+        if self.image_transforms:
+            image = self.image_transforms(image)
+
+        return image
+
+    def _format_img_path(self, img_id):
+        return str(self.data_dir/'Data'/'CLS-LOC'/self.split) + f'/{img_id}.JPEG'
 
 
 class Image:
