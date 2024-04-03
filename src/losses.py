@@ -15,7 +15,7 @@ def lossVQ(img, img_rec, encs, cb_codes, beta):
     return vq_loss
 
 def lossVQ_MSE(z_x, z_x_q_idxs, z_y_q, z_y_q_idxs):
-    """ Formula 5 in the paper: the formula basically tries to bring to sets of learned quantized codes
+    """ Formula 5 in the paper: the formula basically tries to bring two sets of learned quantized codes
     closer together without regressing to the mean
 
     Args:

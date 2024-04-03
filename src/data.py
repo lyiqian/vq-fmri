@@ -1,10 +1,14 @@
 import torch 
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, Sampler
 import pandas as pd 
 from pathlib import Path
 import numpy as np 
 import bdpy
+from torch.utils.data.dataloader import _collate_fn_t, _worker_init_fn_t
 from torchvision.io import read_image
+from torchvision import transforms
+from PIL import Image
+from torch.utils.data import DataLoader
 
 class GODDataset(Dataset):
     def __init__(self, data_dir, image_transforms, split='training'):
@@ -16,7 +20,7 @@ class GODDataset(Dataset):
             data_type = 1
         else:
             self.split = 'test'
-            df_fname = 'image_testing_id.csv'
+            df_fname = 'image_test_id.csv'
             data_type = 2
 
         df_path = data_dir / 'images' / df_fname
@@ -44,27 +48,43 @@ class GODDataset(Dataset):
         self.img_ids = self.img_ids.set_index(0, drop=True)
         for img_id in self.image_ids_all:
             self.image_paths.append(self.img_ids.iloc[self.img_ids.index.get_loc(img_id)][1])
-        
         self.image_transforms = image_transforms
 
     def __len__(self):
-        return len(self.img_labels)
+        return len(self.image_paths)
 
     def __getitem__(self, idx):
         img_path = str(self.data_dir / 'images' / self.split / self.image_paths[idx])
-        print(img_path)
-        image = read_image(img_path)
+        # image = read_image(img_path)
+        image = Image.open(img_path)
         fmri = self.fmri_data_all[idx]
         if self.image_transforms:
             image = self.image_transforms(image)
         return image, fmri
 
+class GODLoader():
+    def __init__(self, data_dir, batch_size=16) -> None:
+        image_transforms = transforms.Compose([
+            transforms.Resize((32, 32)),      # Resize the image to 256x256 pixels
+            transforms.ToTensor(),              # Convert the image to a PyTorch tensor
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),  # Normalize with ImageNet stats
+        ])
+        self.batch_size = batch_size
+        self.train_loader = DataLoader(GODDataset(data_dir=data_dir, image_transforms=image_transforms, split='training'), batch_size=self.batch_size, shuffle=True)
+        self.test_loader = DataLoader(GODDataset(data_dir=data_dir, image_transforms=image_transforms, split='test'), batch_size=self.batch_size, shuffle=False)
+
+    def get_train_loader(self):
+        return self.train_loader
+    
+    def get_test_loader(self):
+        return self.test_loader
+        
 
 class ImageDataset(Dataset):
     pass
 
 
-class Image:
+class ImNetImage:
     pass
 
 
