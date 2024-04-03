@@ -1,6 +1,6 @@
 import torch
 
-from models import TokenNoising, ImageEncoder, ImageDecoder, VectorQuantizer, TokenClassifier, InpaintingNetwork, VqVae
+from models import TokenNoising, ImageEncoder, ImageDecoder, VectorQuantizer, TokenClassifier, InpaintingNetwork, VqVae, VqVaeAbc, FMRIEncoderAbc
 from losses import lossVQ, lossVQ_MSE
 from torch.nn import CrossEntropyLoss
 
@@ -76,8 +76,27 @@ def train_phase1(
             token_inpainting_optimizer.step()
 
 
-def train_phase2():
-    pass
+def train_phase2(
+    train_loader,
+    epochs,
+    fmri_encoder: FMRIEncoderAbc,
+    trained_vq_vae: VqVaeAbc,
+):
+    optimizer = torch.optim.Adam(fmri_encoder.parameters(), lr=2e-4)
+
+    for ep in range(epochs):
+        for images, fmris in train_loader:
+            optimizer.zero_grad()
+
+            fmri_feats = fmri_encoder(fmris)
+            fmri_tokens, fmri_codebook_idxs = trained_vq_vae.quantize(fmri_feats)
+            img_tokens, img_codebook_idxs = trained_vq_vae.encode(images)
+            loss = lossVQ(fmri_feats, fmri_codebook_idxs, img_tokens, img_codebook_idxs)
+
+            loss.backward()
+            optimizer.step()
+
+        print(f"Loss of last batch @ Epoch {ep}: {loss.item()}")
 
 
 def train_phase3():
