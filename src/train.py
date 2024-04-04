@@ -2,12 +2,19 @@ import torch
 
 from models import TokenNoising, ImageEncoder, ImageDecoder, VectorQuantizer, TokenClassifier, InpaintingNetwork, VqVae, VqVaeAbc, FMRIEncoderAbc, UNet
 from losses import lossVQ, lossVQ_MSE
-from torch.nn import CrossEntropyLoss
+from torch.nn import CrossEntropyLoss, BCELoss
 
 from data import GODDataset, GODLoader
 
 from typing import Type
 import itertools
+
+# # TODO: change this with tqdm once it was included in the requirement.txt
+# try:
+#     from tqdm import tqdm as tqdm_if_available
+# except:
+#     def tqdm_if_available(*args):
+#         return args
 
 def train_phase1(
     train_loader: GODDataset,
@@ -49,7 +56,7 @@ def train_phase1(
     # Decode image
     # Calculate the losses
     tk = TokenNoising(noise_rate=0.3)
-    ce_loss = CrossEntropyLoss()
+    ce_loss = BCELoss()
     token_classifier_optimizer = torch.optim.Adam(token_classifier.parameters(), lr=lr)    
     token_inpainting_optimizer = torch.optim.Adam(token_inpainting.parameters(), lr=lr)    
 
@@ -58,12 +65,15 @@ def train_phase1(
             token_classifier_optimizer.zero_grad()
             token_inpainting_optimizer.zero_grad()
             img_encs_q, img_encs_idxs = vq_vae.encode(images)
-            noisy_encs, noise_mask = tk(img_encs_q)
+            with torch.no_grad():
+                noisy_encs, noise_mask = tk(img_encs_q)
             enc_idx_preds = token_classifier(noisy_encs)
             enc_val_preds = token_inpainting(noisy_encs, noise_mask)
             with torch.no_grad():
                 _, env_val_preds_q_idxs = vq_vae.quantizer_.quantize(enc_val_preds)
-            idx_pred_loss = ce_loss(enc_idx_preds, noise_mask)
+            # print(enc_idx_preds.shape)
+            # print(noise_mask.shape)
+            idx_pred_loss = ce_loss(enc_idx_preds, noise_mask.view(noise_mask.shape[0], 1, *noise_mask.shape[1:]))
             # TODO: double check inputs of this loss:
             val_pred_loss = lossVQ_MSE(
                 z_x=enc_val_preds,
@@ -111,8 +121,7 @@ def train_general():
     test_loader = None
     epochs = 2
     vq_vqe = VqVae()
-    # token_classifier = TokenClassifier()
-    token_classifier = UNet()
+    token_classifier = TokenClassifier()
     token_inpainting = InpaintingNetwork(8)
     beta = 2
     train_phase1(train_loader=train_loader, validation_loader=validation_loader,test_loader=test_loader, epochs=epochs,

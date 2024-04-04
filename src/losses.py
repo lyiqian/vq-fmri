@@ -26,6 +26,7 @@ def lossVQ_MSE(z_x, z_x_q_idxs, z_y_q, z_y_q_idxs):
         z_y_q_idxs (_type_): indexes of codebook vectors after quantization of 2nd set (for easier comparison)
     """
     with torch.no_grad():
-        mismatches = torch.ne(z_x_q_idxs == z_y_q_idxs).int()
-    loss = (mse_loss((z_x, z_y_q), reduction='none') * mismatches).mean()
+        mismatches = torch.ne(z_x_q_idxs, z_y_q_idxs).int().view([z_x.shape[0], *z_x.shape[2:]])
+    ml = mse_loss(z_x, z_y_q, reduction='none')
+    loss = torch.einsum('bchw,bhw->bchw', ml, mismatches).mean()
     return loss 

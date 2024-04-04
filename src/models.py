@@ -142,7 +142,7 @@ class SuperResolutionAbc(abc.ABC):  # Bahman
 
 class UNetConvBlock(nn.Module):
     def __init__(
-        self, in_channels, out_channels, kernel_size=4, stride=2, padding=1
+        self, in_channels, out_channels, kernel_size=4, stride=1, padding=1
     ) -> None:
         super().__init__()
         self.conv_layer_1 = nn.Conv2d(
@@ -172,36 +172,32 @@ class UNetEnc(nn.Module):
         # a different formula. Change this if the results were not good!
         # ENCODER PART:
         # uncb_d: UNet Conv Block Down sampling
+
+        # TODO: I set the kernel size of bottleneck to 3, because kernelsize 4 just messes up 
+        # layer dimensionalities!
         self.uncb_d_1 = UNetConvBlock(
             in_channels=in_channels,
             out_channels=in_channels * 2,
-            kernel_size=4,
-            stride=2,
+            kernel_size=3,
+            stride=1,
             padding=1,
         )
         self.down_sampling_1 = nn.MaxPool2d(2, 2)
-        # HACK: this is not based on the actual paper, the second convolution should also have kernel size 4
         self.uncb_d_2 = UNetConvBlock(
             in_channels=in_channels * 2,
             out_channels=in_channels * 4,
-            # kernel_size=4,
-            kernel_size=2,
-            stride=2,
+            kernel_size=3,
+            stride=1,
             padding=1,
         )
         self.down_sampling_2 = nn.MaxPool2d(2, 2)
 
     def forward(self, x):
         uncb_d_1 = self.uncb_d_1(x)
-        print(uncb_d_1.shape)
         down_sampling_1 = self.down_sampling_1(uncb_d_1)
-        print(down_sampling_1.shape)
         uncb_d_2 = self.uncb_d_2(down_sampling_1)
-        print(uncb_d_2.shape)
         down_sampling_2 = self.down_sampling_2(uncb_d_2)
-        print(down_sampling_2.shape)
         resids = [uncb_d_1, uncb_d_2]
-        # print(resids.shape)
         return down_sampling_2, resids
 
 
@@ -209,24 +205,17 @@ class UNetDec(nn.Module):
     def __init__(self, in_channels=8, out_channels=8) -> None:
         super().__init__()
         # DECODER PART:
-        self.uncb_u_1 = UNetConvBlock(
-            in_channels=in_channels * 8,
-            out_channels=in_channels * 4,
-            kernel_size=4,
-            stride=2,
-            padding=1,
-        )
         self.up_sampling_1 = nn.ConvTranspose2d(
             in_channels=in_channels * 8,
             out_channels=in_channels * 4,
             kernel_size=2,
-            stride=2,
+            stride=2
         )
-        self.uncb_u_2 = UNetConvBlock(
-            in_channels=in_channels * 4,
-            out_channels=in_channels * 2,
-            kernel_size=4,
-            stride=2,
+        self.uncb_u_1 = UNetConvBlock(
+            in_channels=in_channels * 8,
+            out_channels=in_channels * 4,
+            kernel_size=3,
+            stride=1,
             padding=1,
         )
         self.up_sampling_2 = nn.ConvTranspose2d(
@@ -235,16 +224,23 @@ class UNetDec(nn.Module):
             kernel_size=2,
             stride=2,
         )
+        self.uncb_u_2 = UNetConvBlock(
+            in_channels=in_channels * 4,
+            out_channels=in_channels * 2,
+            kernel_size=3,
+            stride=1,
+            padding=1,
+        )
 
     def forward(self, x, resids):
         uncb_d_1, uncb_d_2 = resids
-        uncb_u_1 = self.uncb_u_1(x)
-        uncb_u_1 = torch.cat(uncb_u_1, uncb_d_2)
-        up_sampling_1 = self.up_sampling_1(uncb_u_1)
-        uncb_u_2 = self.uncb_u_2(up_sampling_1)
-        uncb_u_2 = torch.cat(uncb_u_2, uncb_d_1)
-        up_sampling_2 = self.up_sampling_2(uncb_u_2)
-        return up_sampling_2
+        up_sampling_1 = self.up_sampling_1(x)
+        up_sampling_1 = torch.cat([up_sampling_1, uncb_d_2], dim=1)
+        uncb_u_1 = self.uncb_u_1(up_sampling_1)
+        up_sampling_2 = self.up_sampling_2(uncb_u_1)
+        up_sampling_2 = torch.cat([up_sampling_2, uncb_d_1], dim=1)
+        uncb_u_2 = self.uncb_u_2(up_sampling_2)
+        return uncb_u_2
 
 
 class UNetDec2X(nn.Module):
@@ -317,11 +313,13 @@ class UNet(nn.Module, UNetAbc):  # Bahman
         super().__init__()
         self.enc = UNetEnc(in_channels=in_channels, out_channels=out_channels)
         # BOTTLENECK
+        # TODO: I set the kernel size of bottleneck to 3, because kernelsize 4 just messes up 
+        # layer dimensionalities!
         self.bottleneck = UNetConvBlock(
             in_channels=in_channels * 4,
             out_channels=in_channels * 8,
-            kernel_size=4,
-            stride=2,
+            kernel_size=3,
+            stride=1,
             padding=1,
         )
         self.dec = UNetDec(in_channels=in_channels, out_channels=out_channels)
@@ -435,11 +433,12 @@ class InpaintingNetwork(nn.Module, InpaintingNetworkAbc):  # Bahman
         super().__init__()
         self.network = UNet(in_channels=dim_encodings, out_channels=dim_encodings)
 
-    def forward(self, x, corrupted_token_indexes):
+    def forward(self, x, noise_mask):
         # corrupted_token_indexes.shape = B, D, W, H (binary mask)
-        mask = torch.ones_like(x)
-        mask[corrupted_token_indexes] = 0
-        masked_tokens = x * mask
+        # mask = torch.ones_like(x)
+        # print(corrupted_token_indexes)
+        # mask[corrupted_token_indexes] = 0
+        masked_tokens = torch.einsum('bchw,bhw->bchw',x, noise_mask)
         output = self.network(masked_tokens)
         return output
 
@@ -514,8 +513,9 @@ class TokenNoising(nn.Module):
 
     def forward(self, x):
         x_clone = x.clone().detach()
-        noise_mask = torch.bernoulli(torch.ones_like(x_clone) * (1 - self.noise_rate))
-        x_clone =  x_clone * noise_mask
+        noise_mask = torch.bernoulli(torch.ones([x_clone.shape[0], *x_clone.shape[2:]]) * (1 - self.noise_rate))
+        # print(x_clone.shape, noise_mask.shape)
+        x_clone = torch.einsum('bchw,bhw->bchw', x_clone, noise_mask)
         return x_clone, noise_mask
 
     def set_noise_rate(self, rate):
@@ -650,6 +650,54 @@ class Denoiser(DenoiserAbc):
         return visual_cues
 
 
+# class TokenClassifier(TokenClassifierAbc, nn.Module):
+#     """We implemented the image classifier ... using the UNet
+
+#     with 2 downsampling and 2 upsampling layers ..."""
+
+#     LR = 1e-4  # TODO TBD
+
+#     def __init__(self):
+#         super().__init__()
+#         self.encoder = UNetEnc(in_channels=VqVae.CODEBOOK_DIM, out_channels=VqVae.CODEBOOK_DIM)
+#         # TODO do we need a bottleneck here?
+#         # Note by Bahman: We do, because decoder expects in_channels * 8 input channels but encoder only provides in_channels * 4
+#         # self.bottleneck = UNetConvBlock(
+#         #     in_channels=VqVae.CODEBOOK_DIM * 4,
+#         #     out_channels=VqVae.CODEBOOK_DIM * 8,
+#         #     kernel_size=4,
+#         #     stride=2,
+#         #     padding=1,
+#         # )
+#         self.decoder = UNetDec(in_channels=int(VqVae.CODEBOOK_DIM /2), out_channels=1)  # True of False
+
+#     def forward(self, x):
+#         down_samped, [uncb_d_1, uncb_d_2] = self.encoder(x)
+#         # bn_out = self.bottleneck(down_samped)
+#         x = self.decoder(down_samped, [uncb_d_1, uncb_d_2])
+#         return x
+
+#     def fit(self, spatial_tokens: SpatialTokens, noise_table: NoiseTable):
+#         loader = torch.utils.data.DataLoader(
+#             torch.utils.data.TensorDataset(spatial_tokens, noise_table),
+#             batch_size=32)
+
+#         loss_fn = torch.nn.BCELoss()
+#         optimizer = torch.optim.Adam(self.parameters(), lr=self.LR)
+
+#         for epoch in range(100):
+#             print("Training epoch", epoch)
+#             for tokens, noise in loader:
+#                 pred = self.forward(tokens)
+#                 loss = loss_fn(pred, noise)
+
+#                 loss.backward()
+#                 optimizer.step()
+#                 optimizer.zero_grad()
+
+#     def predict(self, spatial_tokens: SpatialTokens) -> NoiseTable:
+#         return self.forward(spatial_tokens)
+
 class TokenClassifier(TokenClassifierAbc, nn.Module):
     """We implemented the image classifier ... using the UNet
 
@@ -659,22 +707,10 @@ class TokenClassifier(TokenClassifierAbc, nn.Module):
 
     def __init__(self):
         super().__init__()
-        self.encoder = UNetEnc(in_channels=VqVae.CODEBOOK_DIM, out_channels=VqVae.CODEBOOK_DIM)
-        # TODO do we need a bottleneck here?
-        # Note by Bahman: We do, because decoder expects in_channels * 8 input channels but encoder only provides in_channels * 4
-        # self.bottleneck = UNetConvBlock(
-        #     in_channels=VqVae.CODEBOOK_DIM * 4,
-        #     out_channels=VqVae.CODEBOOK_DIM * 8,
-        #     kernel_size=4,
-        #     stride=2,
-        #     padding=1,
-        # )
-        self.decoder = UNetDec(in_channels=VqVae.CODEBOOK_DIM * 2, out_channels=1)  # True of False
+        self.unet= UNet(in_channels=VqVae.CODEBOOK_DIM, out_channels=1)  # True/False in NoiseTable
 
     def forward(self, x):
-        down_samped, [uncb_d_1, uncb_d_2] = self.encoder(x)
-        bn_out = self.bottleneck(down_samped)
-        x = self.decoder(bn_out, [uncb_d_1, uncb_d_2])
+        x = self.unet(x)
         return x
 
     def fit(self, spatial_tokens: SpatialTokens, noise_table: NoiseTable):
