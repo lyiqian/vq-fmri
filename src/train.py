@@ -25,8 +25,6 @@ def train_phase1(
     beta: float,
     optimizer,
 ):
-    # TODO: noise rate should be set same as error rate in fMRI, we should look up what that value is!
-    # TODO: Maybe increasing the noise rate gradually would be beneficial?
     # torch.autograd.set_detect_anomaly(True)
 
     for epoch in range(epochs):
@@ -81,6 +79,9 @@ def train_phase3(
     beta: float,
     lr:float=0.01
 ):
+    # TODO: noise rate should be set same as error rate in fMRI, we should look up what that value is!
+    # TODO: Maybe increasing the noise rate gradually would be beneficial?
+
     # Train Token Classifier
     # Train Token Inpaingting
     # Decode image
