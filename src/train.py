@@ -15,7 +15,9 @@ from models import (
     MLP
 )
 from losses import lossVQ, lossVQ_MSE, lossSR
+from models import TokenNoising, TokenClassifier, InpaintingNetwork, VqVae, VqVaeAbc, FMRIEncoderAbc, UNet
 from torch.nn import CrossEntropyLoss, BCELoss
+from torch.utils.tensorboard import SummaryWriter
 
 from data import GODLoader, ImageLoader
 
@@ -49,6 +51,9 @@ def train_phase1(
 ):
     # torch.autograd.set_detect_anomaly(True)
 
+    writer = SummaryWriter()
+    glb_iter = 0
+
     for epoch in range(epochs):
         for i, images in enumerate(train_loader):
             optimizer.zero_grad()
@@ -65,7 +70,10 @@ def train_phase1(
 
             if i % 100 == 0:
                 print(f"Loss @ Ep{epoch} Batch{i}: {loss.item()}")
+            writer.add_scalar('phase1/loss', loss.item(), glb_iter)
+            glb_iter += 1
 
+    writer.close()
 
 def train_phase2(
     train_loader,
