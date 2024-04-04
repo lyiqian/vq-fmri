@@ -30,3 +30,9 @@ def lossVQ_MSE(z_x, z_x_q_idxs, z_y_q, z_y_q_idxs):
     ml = mse_loss(z_x, z_y_q, reduction='none')
     loss = torch.einsum('bchw,bhw->bchw', ml, mismatches).mean()
     return loss 
+
+
+def lossSR(y, rec_y, z_x, z_x_q_idxs, z_y_q, z_y_q_idxs):
+    loss_vq_mse = lossVQ_MSE(z_x, z_x_q_idxs, z_y_q, z_y_q_idxs)
+    loss_rec  = (y - rec_y).norm(p=2)
+    return loss_vq_mse + loss_rec

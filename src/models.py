@@ -252,24 +252,17 @@ class UNetDec2X(nn.Module):
 
     def __init__(self, in_channels=8, out_channels=8) -> None:
         super().__init__()
-        self.uncb_u_1 = UNetConvBlock(
-            in_channels=in_channels * 8,
-            out_channels=in_channels * 4,
-            kernel_size=4,
-            stride=2,
-            padding=1,
-        )
         self.up_sampling_1 = nn.ConvTranspose2d(
             in_channels=in_channels * 8,
             out_channels=in_channels * 4,
             kernel_size=2,
             stride=2,
         )
-        self.uncb_u_2 = UNetConvBlock(
-            in_channels=in_channels * 4,
-            out_channels=in_channels * 2,
-            kernel_size=4,
-            stride=2,
+        self.uncb_u_1 = UNetConvBlock(
+            in_channels=in_channels * 8,
+            out_channels=in_channels * 4,
+            kernel_size=3,
+            stride=1,
             padding=1,
         )
         self.up_sampling_2 = nn.ConvTranspose2d(
@@ -278,33 +271,40 @@ class UNetDec2X(nn.Module):
             kernel_size=2,
             stride=2,
         )
-        self.uncb_u_3 = UNetConvBlock(
-            in_channels=in_channels * 2,
-            out_channels=in_channels,
-            kernel_size=4,
-            stride=2,
+        self.uncb_u_2 = UNetConvBlock(
+            in_channels=in_channels * 4,
+            out_channels=in_channels * 2,
+            kernel_size=3,
+            stride=1,
             padding=1,
         )
         self.up_sampling_3 = nn.ConvTranspose2d(
-            in_channels=in_channels * 1,
-            out_channels=in_channels,
+            in_channels=in_channels * 2,
+            out_channels=in_channels * 2,
             kernel_size=2,
             stride=2,
         )
+        self.uncb_u_3 = UNetConvBlock(
+            in_channels=in_channels * 2,
+            out_channels=in_channels * 2,
+            kernel_size=3,
+            stride=1,
+            padding=1,
+        )
 
-        def forward(self, x, resids):
-            uncb_d_1, uncb_d_2 = resids
-            uncb_u_1 = self.uncb_u_1(x)
-            uncb_u_1 = torch.cat(uncb_u_1, uncb_d_2)
-            up_sampling_1 = self.up_sampling_1(uncb_u_1)
-            uncb_u_2 = self.uncb_u_2(up_sampling_1)
-            uncb_u_2 = torch.cat(uncb_u_2, uncb_d_1)
-            up_sampling_2 = self.up_sampling_2(uncb_u_2)
-            # X2 part:
-            uncb_u_3 = self.uncb_u_3(up_sampling_2)
-            uncb_u_3 = torch.cat(uncb_u_3, uncb_d_1)
-            up_sampling_3 = self.up_sampling_3(uncb_u_3)
-            return up_sampling_3
+
+    def forward(self, x, resids):
+        uncb_d_1, uncb_d_2 = resids
+        up_sampling_1 = self.up_sampling_1(x)
+        up_sampling_1 = torch.cat([up_sampling_1, uncb_d_2], dim=1)
+        uncb_u_1 = self.uncb_u_1(up_sampling_1)
+        up_sampling_2 = self.up_sampling_2(uncb_u_1)
+        up_sampling_2 = torch.cat([up_sampling_2, uncb_d_1], dim=1)
+        uncb_u_2 = self.uncb_u_2(up_sampling_2)
+        # X2 part:
+        up_sampling_3 = self.up_sampling_3(uncb_u_2)
+        uncb_u_3 = self.uncb_u_3(up_sampling_3)
+        return uncb_u_3
 
 
 class UNet(nn.Module, UNetAbc):  # Bahman
@@ -350,8 +350,8 @@ class SRNetwork(nn.Module, UNetAbc):  # Bahman
         self.bottleneck = UNetConvBlock(
             in_channels=in_channels * 4,
             out_channels=in_channels * 8,
-            kernel_size=4,
-            stride=2,
+            kernel_size=3,
+            stride=1,
             padding=1,
         )
         self.dec = UNetDec2X(in_channels=in_channels, out_channels=out_channels)
@@ -362,12 +362,16 @@ class SRNetwork(nn.Module, UNetAbc):  # Bahman
     def forward(self, x):
         # TODO: I'm also not sure if people still use sigmoid as the last activation function for
         # UNets.
-        down_samped, uncb_d_1, uncb_d_2 = self.enc(x)
+        down_samped, resids = self.enc(x)
         bottleneck = self.bottleneck(down_samped)
-        up_samped = self.dec(bottleneck, uncb_d_1, uncb_d_2)
+        # TODO: we can try also adding the input as a redisual connection since 
+        # this is super resolution
+        up_samped = self.dec(bottleneck, resids)
         unary_conv = torch.sigmoid(self.unary_conv(up_samped))
         return unary_conv
 
+    def transform(self, *args):
+        pass
 
 class VectorQuantizer(nn.Module, VectorQuantizerAbc):
     """
@@ -448,61 +452,6 @@ class InpaintingNetwork(nn.Module, InpaintingNetworkAbc):  # Bahman
     def decode(self, encoded_vis_cues: EncodedVisualCues) -> SpatialTokens:
         pass
 
-
-class SuperResolutionModule(nn.Module, SuperResolutionAbc):  # Bahman
-
-    def __init__(
-        self,
-        fmri_encoder,
-        image_encoder_small,
-        image_encoder_large,
-        vector_quantizer_fmri,
-        vector_quantizer_img_small,
-        vector_quantizer_img_large,
-        token_classifier,
-        inpainting_network,
-        image_decoder_large,
-        resize_factor=2,
-        img_size=[224, 224],
-        dim_encodings = 8
-    ) -> None:
-        super().__init__()
-        self.resize_factor = resize_factor
-        self.img_size = img_size
-        self.down_scaled_size = [int(d) for d in img_size / resize_factor]
-        self.fmri_enc = fmri_encoder
-        self.img_enc_s = image_encoder_small
-        self.img_enc_l = image_encoder_large
-        self.img_dec_l = image_decoder_large
-        self.fmri_vq = vector_quantizer_fmri
-        self.img_vq_s = vector_quantizer_img_small
-        self.img_vq_l = vector_quantizer_img_large
-        self.token_classifier = token_classifier
-        self.inpainting_network = inpainting_network
-        self.sr = SRNetwork(in_channels=dim_encodings, out_channels=8)
-
-    def downsize_image(self, image):
-        visionF.resize(image, self.down_scaled_size)
-
-    def forward_train(self, y):
-        y_ds = self.downsize_image(y)
-        z_ds = self.img_vq_s(self.img_enc_s(y_ds))
-        z_sr = self.sr(z_ds)
-        z = self.img_vq_l(self.img_enc_l(y))
-        y_sr = self.img_dec_l(z_sr)
-        y = self.img_dec_l(z)
-        return y, z , y_sr, z_sr
-
-
-    def forward(self, x):
-        x_mismatches = self.token_classifier(x)
-        x_corrected = self.inpainting_network(x, x_mismatches)
-        x_sr = self.sr(x_corrected)
-        y_sr = self.img_dec_l(x_sr)
-        return y_sr
-
-    def transform(self, spatial_tokens: SpatialTokens) -> SpatialTokens:
-        pass
 
 
 class TokenNoising(nn.Module):
@@ -639,7 +588,9 @@ class VqVae(VqVaeAbc):
     def decode(self, spatial_tokens: SpatialTokens) -> ImNetImage:
         return self.decoder_.decode(spatial_tokens)
 
-    def quantize(self, spatial_feats: SpatialFeats) -> SpatialTokens:
+    def quantize(self, spatial_feats: SpatialFeats):
+        # Returns both quantized vecotrs and indexes!
+        # TODO: fix typing annotations
         return self.quantizer_.quantize(spatial_feats)
 
 
@@ -649,54 +600,6 @@ class Denoiser(DenoiserAbc):
         visual_cues = VisualCues(tokens=spatial_tokens, noise_table=noise_table)
         return visual_cues
 
-
-# class TokenClassifier(TokenClassifierAbc, nn.Module):
-#     """We implemented the image classifier ... using the UNet
-
-#     with 2 downsampling and 2 upsampling layers ..."""
-
-#     LR = 1e-4  # TODO TBD
-
-#     def __init__(self):
-#         super().__init__()
-#         self.encoder = UNetEnc(in_channels=VqVae.CODEBOOK_DIM, out_channels=VqVae.CODEBOOK_DIM)
-#         # TODO do we need a bottleneck here?
-#         # Note by Bahman: We do, because decoder expects in_channels * 8 input channels but encoder only provides in_channels * 4
-#         # self.bottleneck = UNetConvBlock(
-#         #     in_channels=VqVae.CODEBOOK_DIM * 4,
-#         #     out_channels=VqVae.CODEBOOK_DIM * 8,
-#         #     kernel_size=4,
-#         #     stride=2,
-#         #     padding=1,
-#         # )
-#         self.decoder = UNetDec(in_channels=int(VqVae.CODEBOOK_DIM /2), out_channels=1)  # True of False
-
-#     def forward(self, x):
-#         down_samped, [uncb_d_1, uncb_d_2] = self.encoder(x)
-#         # bn_out = self.bottleneck(down_samped)
-#         x = self.decoder(down_samped, [uncb_d_1, uncb_d_2])
-#         return x
-
-#     def fit(self, spatial_tokens: SpatialTokens, noise_table: NoiseTable):
-#         loader = torch.utils.data.DataLoader(
-#             torch.utils.data.TensorDataset(spatial_tokens, noise_table),
-#             batch_size=32)
-
-#         loss_fn = torch.nn.BCELoss()
-#         optimizer = torch.optim.Adam(self.parameters(), lr=self.LR)
-
-#         for epoch in range(100):
-#             print("Training epoch", epoch)
-#             for tokens, noise in loader:
-#                 pred = self.forward(tokens)
-#                 loss = loss_fn(pred, noise)
-
-#                 loss.backward()
-#                 optimizer.step()
-#                 optimizer.zero_grad()
-
-#     def predict(self, spatial_tokens: SpatialTokens) -> NoiseTable:
-#         return self.forward(spatial_tokens)
 
 class TokenClassifier(TokenClassifierAbc, nn.Module):
     """We implemented the image classifier ... using the UNet
@@ -773,3 +676,54 @@ class FMRIEncoder(FMRIEncoderAbc, nn.Module):
 
     def encode(self, fmri: FMRI) -> SpatialFeats:
         return self.forward(fmri)
+
+
+class SuperResolutionModule(nn.Module, SuperResolutionAbc):  # Bahman
+
+    def __init__(
+        self,
+        vq_vae_s: VqVae,
+        vq_vae_l: VqVae,
+        vq_vae_fmri: VqVae,
+        token_classifier: TokenClassifier,
+        inpainting_network: InpaintingNetwork,
+        resize_factor:float=2,
+        img_size:tuple=[224, 224],
+        dim_encodings:int = 8
+    ) -> None:
+        super().__init__()
+        self.resize_factor = resize_factor
+        self.img_size = img_size
+        self.down_scaled_size = [int(d/resize_factor) for d in img_size]
+        self.vq_vae_fmri = vq_vae_fmri
+        self.vq_vae_s = vq_vae_s
+        self.vq_vae_l = vq_vae_l
+        self.token_classifier = token_classifier
+        self.inpainting_network = inpainting_network
+        self.sr = SRNetwork(in_channels=dim_encodings, out_channels=8)
+
+    def downsize_image(self, image):
+        return visionF.resize(image, self.down_scaled_size)
+
+    def forward_train(self, y):
+        y_ds = self.downsize_image(y)
+        # print(y_ds)
+        z_ds, _ = self.vq_vae_s.encode(y_ds)
+        z_sr = self.sr(z_ds)
+        z_l = self.vq_vae_l.encoder_.encode(y)
+        z_l_q, z_l_q_idx = self.vq_vae_l.quantize(z_l)
+        z_sr_q, z_sr_q_idx = self.vq_vae_l.quantize(z_sr)
+        y_sr = self.vq_vae_l.decode(z_sr_q)
+        y_l = self.vq_vae_l.decode(z_l)
+        return y_l, z_l, z_l_q, z_l_q_idx , y_sr, z_sr, z_sr_q, z_sr_q_idx
+
+
+    def forward(self, x):
+        x_mismatches = self.token_classifier(x)
+        x_corrected = self.inpainting_network(x, x_mismatches)
+        x_sr = self.sr(x_corrected)
+        y_sr = self.img_dec_l(x_sr)
+        return y_sr
+
+    def transform(self, spatial_tokens: SpatialTokens) -> SpatialTokens:
+        pass
