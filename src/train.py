@@ -4,7 +4,7 @@ from models import TokenNoising, ImageEncoder, ImageDecoder, VectorQuantizer, To
 from losses import lossVQ, lossVQ_MSE
 from torch.nn import CrossEntropyLoss, BCELoss
 
-from data import GODDataset, GODLoader
+from data import GODDataset, GODLoader, ImageDataset
 
 from typing import Type
 import itertools
@@ -17,74 +17,34 @@ import itertools
 #         return args
 
 def train_phase1(
-    train_loader: GODDataset,
-    validation_loader: GODDataset,
-    test_loader: GODDataset,
-    epochs: int,
+    train_loader,
+    validation_loader,
+    test_loader,
     vq_vae: VqVae,
-    token_classifier: TokenClassifier,
-    token_inpainting: InpaintingNetwork,
+    epochs: int,
     beta: float,
-    lr:float=0.01
+    optimizer,
 ):
     # TODO: noise rate should be set same as error rate in fMRI, we should look up what that value is!
     # TODO: Maybe increasing the noise rate gradually would be beneficial?
     # torch.autograd.set_detect_anomaly(True)
 
-    params = itertools.chain(
-        vq_vae.encoder_.parameters(),
-        vq_vae.quantizer_.parameters(),
-        vq_vae.decoder_.parameters())
-    optimizer = torch.optim.Adam(params, lr=vq_vae.LR)    
-
-    # for epoch in range(epochs):
-    #     for i, (images, _) in enumerate(train_loader):
-    #         optimizer.zero_grad()
-    #         # VQVQE part:
-    #         # Encode image
-    #         # Learn Codebook
-    #         # Quantize encodigns
-    #         img_encs = vq_vae.encoder_.encode(images)
-    #         img_encs_q, img_encs_idxs = vq_vae.quantizer_.quantize(img_encs)
-    #         img_rec = vq_vae.decoder_.decode(img_encs_q)
-    #         code_book_loss = lossVQ(images, img_rec, img_encs, img_encs_q, beta)
-    #         code_book_loss.backward()
-    #         optimizer.step()
-
-    # Train Token Classifier
-    # Train Token Inpaingting
-    # Decode image
-    # Calculate the losses
-    tk = TokenNoising(noise_rate=0.3)
-    ce_loss = BCELoss()
-    token_classifier_optimizer = torch.optim.Adam(token_classifier.parameters(), lr=lr)    
-    token_inpainting_optimizer = torch.optim.Adam(token_inpainting.parameters(), lr=lr)    
-
     for epoch in range(epochs):
-        for i, (images, _) in enumerate(train_loader):
-            token_classifier_optimizer.zero_grad()
-            token_inpainting_optimizer.zero_grad()
-            img_encs_q, img_encs_idxs = vq_vae.encode(images)
-            with torch.no_grad():
-                noisy_encs, noise_mask = tk(img_encs_q)
-            enc_idx_preds = token_classifier(noisy_encs)
-            enc_val_preds = token_inpainting(noisy_encs, noise_mask)
-            with torch.no_grad():
-                _, env_val_preds_q_idxs = vq_vae.quantizer_.quantize(enc_val_preds)
-            # print(enc_idx_preds.shape)
-            # print(noise_mask.shape)
-            idx_pred_loss = ce_loss(enc_idx_preds, noise_mask.view(noise_mask.shape[0], 1, *noise_mask.shape[1:]))
-            # TODO: double check inputs of this loss:
-            val_pred_loss = lossVQ_MSE(
-                z_x=enc_val_preds,
-                z_x_q_idxs=env_val_preds_q_idxs,
-                z_y_q=img_encs_q,
-                z_y_q_idxs=img_encs_idxs,
-            )
-            idx_pred_loss.backward()
-            val_pred_loss.backward()
-            token_classifier_optimizer.step()
-            token_inpainting_optimizer.step()
+        for i, images in enumerate(train_loader):
+            optimizer.zero_grad()
+            # VQVQE part:
+            # Encode image
+            # Learn Codebook
+            # Quantize encodigns
+            img_encs = vq_vae.encoder_.encode(images)
+            img_encs_q, img_encs_idxs = vq_vae.quantizer_.quantize(img_encs)
+            img_rec = vq_vae.decoder_.decode(img_encs_q)
+            loss = lossVQ(images, img_rec, img_encs, img_encs_q, beta)
+            loss.backward()
+            optimizer.step()
+
+            if i % 100 == 0:
+                print(f"Loss @ Ep{epoch} Batch{i}: {loss.item()}")
 
 
 def train_phase2(
@@ -102,7 +62,7 @@ def train_phase2(
             fmri_feats = fmri_encoder(fmris)
             fmri_tokens, fmri_codebook_idxs = trained_vq_vae.quantize(fmri_feats)
             img_tokens, img_codebook_idxs = trained_vq_vae.encode(images)
-            loss = lossVQ(fmri_feats, fmri_codebook_idxs, img_tokens, img_codebook_idxs)
+            loss = lossVQ_MSE(fmri_feats, fmri_codebook_idxs, img_tokens, img_codebook_idxs)
 
             loss.backward()
             optimizer.step()
@@ -110,8 +70,51 @@ def train_phase2(
         print(f"Loss of last batch @ Epoch {ep}: {loss.item()}")
 
 
-def train_phase3():
-    pass
+def train_phase3(
+    train_loader: GODDataset,
+    validation_loader: GODDataset,
+    test_loader: GODDataset,
+    epochs: int,
+    trained_vq_vae: VqVaeAbc,
+    token_classifier: TokenClassifier,
+    token_inpainting: InpaintingNetwork,
+    beta: float,
+    lr:float=0.01
+):
+    # Train Token Classifier
+    # Train Token Inpaingting
+    # Decode image
+    # Calculate the losses
+    tk = TokenNoising(noise_rate=0.3)
+    ce_loss = BCELoss()
+    token_classifier_optimizer = torch.optim.Adam(token_classifier.parameters(), lr=lr)    
+    token_inpainting_optimizer = torch.optim.Adam(token_inpainting.parameters(), lr=lr)    
+
+    for epoch in range(epochs):
+        for i, (images, _) in enumerate(train_loader):
+            token_classifier_optimizer.zero_grad()
+            token_inpainting_optimizer.zero_grad()
+            img_encs_q, img_encs_idxs = trained_vq_vae.encode(images)
+            with torch.no_grad():
+                noisy_encs, noise_mask = tk(img_encs_q)
+            enc_idx_preds = token_classifier(noisy_encs)
+            enc_val_preds = token_inpainting(noisy_encs, noise_mask)
+            with torch.no_grad():
+                _, env_val_preds_q_idxs = trained_vq_vae.quantizer_.quantize(enc_val_preds)
+            # print(enc_idx_preds.shape)
+            # print(noise_mask.shape)
+            idx_pred_loss = ce_loss(enc_idx_preds, noise_mask.view(noise_mask.shape[0], 1, *noise_mask.shape[1:]))
+            # TODO: double check inputs of this loss:
+            val_pred_loss = lossVQ_MSE(
+                z_x=enc_val_preds,
+                z_x_q_idxs=env_val_preds_q_idxs,
+                z_y_q=img_encs_q,
+                z_y_q_idxs=img_encs_idxs,
+            )
+            idx_pred_loss.backward()
+            val_pred_loss.backward()
+            token_classifier_optimizer.step()
+            token_inpainting_optimizer.step()
 
 
 def train_general():
@@ -129,4 +132,4 @@ def train_general():
 
 
 
-train_general()
+# train_general()
