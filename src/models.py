@@ -515,11 +515,13 @@ class ImageEncoder(ImageEncoderAbc, nn.Module):
     def __init__(self, out_channels, in_channels=3) -> None:
         super().__init__()
         self.conv_block = EncoderConvBlock(in_channels, out_channels, kernel_size=4, stride=2, padding=1)
-        self.res_block = ResBlock(out_channels, out_channels)
+        self.res_block1 = ResBlock(out_channels, out_channels//2)
+        self.res_block2 = ResBlock(out_channels, out_channels//2)
 
     def forward(self, x):
         x = self.conv_block(x)
-        x = self.res_block(x)
+        x = self.res_block1(x)
+        x = self.res_block2(x)
         return x
 
     def encode(self, x):
@@ -529,11 +531,13 @@ class ImageEncoder(ImageEncoderAbc, nn.Module):
 class ImageDecoder(ImageDecoderAbc, nn.Module):
     def __init__(self, in_channels):
         super().__init__()
-        self.res_block = ResBlock(in_channels, in_channels)
+        self.res_block1 = ResBlock(in_channels, in_channels//2)
+        self.res_block2 = ResBlock(in_channels, in_channels//2)
         self.conv_block = DecoderConvBlock(in_channels)
 
     def forward(self, x):
-        x = self.res_block(x)
+        x = self.res_block1(x)
+        x = self.res_block2(x)
         x = self.conv_block(x)
         return x
 
