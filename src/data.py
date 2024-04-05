@@ -87,50 +87,50 @@ class GODLoader():
         return self.test_loader
         
 
-class ImageDataset(Dataset):
-    """The 'train_cls' set of ImageNet containing 1.2M images.
-
-    Also supports 'test' and 'val' sets."""
-    def __init__(self, data_dir, image_transforms, split='train') -> None:
-        self.data_dir = Path(data_dir)
-        self.split = split
-        self.image_transforms = image_transforms
-
-        df_basepath = self.data_dir / 'ImageSets' / 'CLS-LOC'
-        df_fname = f'{split}_cls.txt' if split == 'train' else f'{split}.txt'
-        self.img_info = (
-            pd.read_csv(df_basepath/df_fname, header=None, sep=' ')
-                .assign(path=lambda df: df[0].apply(self._format_img_path))
-                .set_index(1)
-        )
-
-    def __len__(self):
-        return len(self.img_info)
-
-    def __getitem__(self, idx):
-        img_path = self.img_info.at[idx+1, 'path']
-        image = read_image(img_path)
-
-        if self.image_transforms:
-            image = self.image_transforms(image)
-
-        return image
-
-    def _format_img_path(self, img_id):
-        return str(self.data_dir/'Data'/'CLS-LOC'/self.split) + f'/{img_id}.JPEG'
-
-
 # class ImageDataset(Dataset):
-#     """Dummy class for testing purposes"""
+#     """The 'train_cls' set of ImageNet containing 1.2M images.
+
+#     Also supports 'test' and 'val' sets."""
 #     def __init__(self, data_dir, image_transforms, split='train') -> None:
-#         super().__init__()
+#         self.data_dir = Path(data_dir)
+#         self.split = split
+#         self.image_transforms = image_transforms
+
+#         df_basepath = self.data_dir / 'ImageSets' / 'CLS-LOC'
+#         df_fname = f'{split}_cls.txt' if split == 'train' else f'{split}.txt'
+#         self.img_info = (
+#             pd.read_csv(df_basepath/df_fname, header=None, sep=' ')
+#                 .assign(path=lambda df: df[0].apply(self._format_img_path))
+#                 .set_index(1)
+#         )
 
 #     def __len__(self):
-#         return 10
+#         return len(self.img_info)
 
 #     def __getitem__(self, idx):
-#         random_tensor = torch.rand(3, 128, 128)
-#         return random_tensor
+#         img_path = self.img_info.at[idx+1, 'path']
+#         image = read_image(img_path)
+
+#         if self.image_transforms:
+#             image = self.image_transforms(image)
+
+#         return image
+
+#     def _format_img_path(self, img_id):
+#         return str(self.data_dir/'Data'/'CLS-LOC'/self.split) + f'/{img_id}.JPEG'
+
+
+class ImageDataset(Dataset):
+    """Dummy class for testing purposes"""
+    def __init__(self, data_dir, image_transforms, split='train') -> None:
+        super().__init__()
+
+    def __len__(self):
+        return 10
+
+    def __getitem__(self, idx):
+        random_tensor = torch.rand(3, 128, 128)
+        return random_tensor
 
 class ImageLoader():
     def __init__(self, data_dir, batch_size=16) -> None:
@@ -151,66 +151,6 @@ class ImageLoader():
 class ImNetImage(torch.Tensor):
     # Class used only for type hinting
     pass 
-
-
-# class SRData(Dataset):
-#     DOWN_SAMPLING_SIZE  = 64
-#     ORIGINAL_SIZE = 128
-
-#     """Dataset for getting Super resolution data, same as ImageNet, but will return a tuple of large image and a smaller size image"""
-#     def __init__(self, data_dir, image_transforms, split='train') -> None:
-#         self.data_dir = Path(data_dir)
-#         self.split = split
-#         self.image_transforms = image_transforms
-#         self.original_size_transforms = transforms.Compose([
-#             transforms.Resize((self.ORIGINAL_SIZE, self.ORIGINAL_SIZE))
-#         ])
-#         self.down_sample_transform = transforms.Compose([
-#             transforms.Resize((self.DOWN_SAMPLING_SIZE, self.DOWN_SAMPLING_SIZE))
-#         ])
-
-#         df_basepath = self.data_dir / 'ImageSets' / 'CLS-LOC'
-#         df_fname = f'{split}_cls.txt' if split == 'train' else f'{split}.txt'
-#         self.img_info = (
-#             pd.read_csv(df_basepath/df_fname, header=None, sep=' ')
-#                 .assign(path=lambda df: df[0].apply(self._format_img_path))
-#                 .set_index(1)
-#         )
-
-#     def __len__(self):
-#         return len(self.img_info)
-
-#     def __getitem__(self, idx):
-#         img_path = self.img_info.at[idx+1, 'path']
-#         image = read_image(img_path)
-
-#         image = self.original_size_transforms(image)
-#         ds_image = self.down_sample_transform(image)
-#         if self.image_transforms:
-#             image = self.image_transforms(image)
-#             ds_image = self.image_transforms(ds_image)
-#         return image, ds_image
-
-#     def _format_img_path(self, img_id):
-#         return str(self.data_dir/'Data'/'CLS-LOC'/self.split) + f'/{img_id}.JPEG'
-
-
-# class SRLoader():
-#     def __init__(self, data_dir, batch_size=16) -> None:
-#         image_transforms = transforms.Compose([
-#             transforms.ToTensor(),              # Convert the image to a PyTorch tensor
-#             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),  # Normalize with ImageNet stats
-#         ])
-#         self.batch_size = batch_size
-#         self.train_loader = DataLoader(SRData(data_dir=data_dir, image_transforms=image_transforms, split='training'), batch_size=self.batch_size, shuffle=True)
-#         self.test_loader = DataLoader(SRData(data_dir=data_dir, image_transforms=image_transforms, split='test'), batch_size=self.batch_size, shuffle=False)
-
-#     def get_train_loader(self):
-#         return self.train_loader
-    
-#     def get_test_loader(self):
-#         return self.test_loader
-        
 
 
 class FMRI:

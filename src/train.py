@@ -12,6 +12,7 @@ from models import (
     FMRIEncoderAbc,
     UNet,
     SuperResolutionModule,
+    MLP
 )
 from losses import lossVQ, lossVQ_MSE, lossSR
 from torch.nn import CrossEntropyLoss, BCELoss
@@ -140,7 +141,8 @@ def train_sr(
     image_loader: ImageLoader,
     sr_module: SuperResolutionModule,
     vq_vae_large: VqVae,
-    epochs: int
+    epochs: int,
+    beta:float
 ):
     """Eventhough the main paper divides the training into 3 main phases,
     there is also a 4th phase for training the super resolution modules
@@ -186,11 +188,27 @@ def train_sr(
             optimizer_sr.step()
 
 
+def inference(godloader:GODLoader, fmri_mlp: MLP, fmri_vqvae:VqVae, sr_module: SuperResolutionModule):
+    for idx_batch, (image, fmri) in enumerate(godloader):
+        print(fmri[:,:10])
+        print(fmri.to(torch.float32)[:,0])
+        print(type(fmri[:,0]))
+        print(image.shape)
+        encoded_fmri, _ = fmri_vqvae.encode((fmri_mlp(fmri.to(torch.float32)[:,:10])))
+        print(encoded_fmri.shape)
+        output = sr_module(encoded_fmri)
+        print(output.shape)
+
+
 def train_general():
     data_loader = GODLoader(
         data_dir="/Users/bahman/Documents/courses/Deep Learning/Project/code/data",
-        batch_size=16,
+        batch_size=2,
     )
+    # data_loader = ImageLoader(
+    #     data_dir="/Users/bahman/Documents/courses/Deep Learning/Project/code/data",
+    #     batch_size=16,
+    # )
     train_loader = data_loader.get_train_loader()
     validation_loader = None
     test_loader = None
@@ -199,42 +217,38 @@ def train_general():
     token_classifier = TokenClassifier()
     token_inpainting = InpaintingNetwork(8)
     beta = 2
-    train_phase1(
-        train_loader=train_loader,
-        validation_loader=validation_loader,
-        test_loader=test_loader,
-        epochs=epochs,
-        vq_vae=vq_vqe,
-        token_classifier=token_classifier,
-        token_inpainting=token_inpainting,
-        beta=beta,
+    # train_phase1(
+    #     train_loader=train_loader,
+    #     validation_loader=validation_loader,
+    #     test_loader=test_loader,
+    #     epochs=epochs,
+    #     vq_vae=vq_vqe,
+    #     token_classifier=token_classifier,
+    #     token_inpainting=token_inpainting,
+    #     beta=beta,
+    # )
+
+    train_loader = data_loader.get_train_loader()
+    validation_loader = None
+    test_loader = None
+    epochs = 2
+    vq_vae_large = VqVae()
+    vq_vae_s = VqVae()
+    vq_vae_fmri = VqVae(in_channels=8)
+    token_classifier = TokenClassifier()
+    token_inpainting = InpaintingNetwork(8)
+    sr_module = SuperResolutionModule(
+        vq_vae_s,
+        vq_vae_large,
+        vq_vae_fmri,
+        token_classifier,
+        token_inpainting,
+        resize_factor=2,
+        img_size=[128, 128],
     )
+    beta = 2
+    # train_sr(train_loader, sr_module, vq_vae_large, epochs, beta)
+    fmri_mlp = MLP(10, 8)
+    inference(train_loader, fmri_mlp, vq_vae_fmri, sr_module)
 
-
-data_loader = ImageLoader(
-    data_dir="/Users/bahman/Documents/courses/Deep Learning/Project/code/data",
-    batch_size=16,
-)
-train_loader = data_loader.get_train_loader()
-validation_loader = None
-test_loader = None
-epochs = 2
-vq_vae_large = VqVae()
-vq_vae_s = VqVae()
-vq_vae_fmri = VqVae()
-token_classifier = TokenClassifier()
-token_inpainting = InpaintingNetwork(8)
-sr_module = SuperResolutionModule(
-    vq_vae_s,
-    vq_vae_large,
-    vq_vae_fmri,
-    token_classifier,
-    token_inpainting,
-    resize_factor=2,
-    img_size=[128, 128],
-)
-beta = 2
-train_sr(train_loader, sr_module, vq_vae_large, epochs)
-
-
-# train_general()
+train_general()

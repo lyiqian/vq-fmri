@@ -512,9 +512,9 @@ class DecoderConvBlock(nn.Module):
 
 
 class ImageEncoder(ImageEncoderAbc, nn.Module):
-    def __init__(self, out_channels) -> None:
+    def __init__(self, out_channels, in_channels=3) -> None:
         super().__init__()
-        self.conv_block = EncoderConvBlock(3, out_channels, kernel_size=4, stride=2, padding=1)
+        self.conv_block = EncoderConvBlock(in_channels, out_channels, kernel_size=4, stride=2, padding=1)
         self.res_block = ResBlock(out_channels, out_channels)
 
     def forward(self, x):
@@ -548,9 +548,9 @@ class VqVae(VqVaeAbc):
     LR = 2e-4
     ENCODER_ALPHA = 0.25
 
-    def __init__(self) -> None:
+    def __init__(self, in_channels=3) -> None:
         super().__init__()
-        self.encoder_ = ImageEncoder(self.CODEBOOK_DIM)
+        self.encoder_ = ImageEncoder(self.CODEBOOK_DIM, in_channels=in_channels)
         self.decoder_ = ImageDecoder(self.CODEBOOK_DIM)
         self.quantizer_ = VectorQuantizer(dim_encodings=self.CODEBOOK_DIM, num_encodings=self.CODEBOOK_SIZE)
 
@@ -707,7 +707,6 @@ class SuperResolutionModule(nn.Module, SuperResolutionAbc):  # Bahman
 
     def forward_train(self, y):
         y_ds = self.downsize_image(y)
-        # print(y_ds)
         z_ds, _ = self.vq_vae_s.encode(y_ds)
         z_sr = self.sr(z_ds)
         z_l = self.vq_vae_l.encoder_.encode(y)
@@ -720,9 +719,9 @@ class SuperResolutionModule(nn.Module, SuperResolutionAbc):  # Bahman
 
     def forward(self, x):
         x_mismatches = self.token_classifier(x)
-        x_corrected = self.inpainting_network(x, x_mismatches)
+        x_corrected = self.inpainting_network(x, torch.squeeze(x_mismatches))
         x_sr = self.sr(x_corrected)
-        y_sr = self.img_dec_l(x_sr)
+        y_sr = self.vq_vae_l.decode(x_sr)
         return y_sr
 
     def transform(self, spatial_tokens: SpatialTokens) -> SpatialTokens:
