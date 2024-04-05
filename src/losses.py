@@ -12,7 +12,7 @@ def lossVQ(img, img_rec, encs, cb_codes, beta):
         encs_clone = encs.clone().detach()
     commitment_loss = mse_loss(encs, cb_codes_clone)
     codebook_loss = mse_loss(encs_clone, cb_codes)
-    vq_loss = reconstruction_loss + codebook_loss + beta * commitment_loss
+    vq_loss = 20 * reconstruction_loss + codebook_loss + beta * commitment_loss
     return vq_loss
 
 def lossVQ_MSE(z_x, z_x_q_idxs, z_y_q, z_y_q_idxs):
