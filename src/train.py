@@ -15,7 +15,10 @@ from models import (
     MLP
 )
 from losses import lossVQ, lossVQ_MSE, lossSR
+from models import TokenNoising, TokenClassifier, InpaintingNetwork, VqVae, VqVaeAbc, FMRIEncoderAbc, UNet
 from torch.nn import CrossEntropyLoss, BCELoss
+from torch.nn.functional import mse_loss
+from torch.utils.tensorboard import SummaryWriter
 
 from data import GODLoader, ImageLoader
 
@@ -49,6 +52,9 @@ def train_phase1(
 ):
     # torch.autograd.set_detect_anomaly(True)
 
+    writer = SummaryWriter()
+    glb_iter = 0
+
     for epoch in range(epochs):
         for i, images in enumerate(train_loader):
             optimizer.zero_grad()
@@ -57,15 +63,26 @@ def train_phase1(
             # Learn Codebook
             # Quantize encodigns
             img_encs = vq_vae.encoder_.encode(images)
-            img_encs_q, img_encs_idxs = vq_vae.quantizer_.quantize(img_encs)
+            img_encs_q, __, dict_loss, comm_loss = vq_vae.quantizer_.quantize(img_encs)
             img_rec = vq_vae.decoder_.decode(img_encs_q)
-            loss = lossVQ(images, img_rec, img_encs, img_encs_q, beta)
+            # loss = lossVQ(images, img_rec, img_encs, img_encs_q, beta)
+            loss = 20 * mse_loss(images, img_rec) + dict_loss + beta*comm_loss
             loss.backward()
             optimizer.step()
 
-            if i % 100 == 0:
+            if glb_iter % 1000 == 0:
                 print(f"Loss @ Ep{epoch} Batch{i}: {loss.item()}")
+                encoded, __ = vq_vae.encode(train_loader.dataset[1].unsqueeze(0))
+                decoded = vq_vae.decode(encoded).squeeze(0)
+                writer.add_image('phase1/decoded_img', decoded, glb_iter)
+            writer.add_scalar('phase1/loss', loss.item(), glb_iter)
+            mean_code_norm = vq_vae.quantizer_.codebook.norm(2, dim=1).mean()
+            std_code_norm = vq_vae.quantizer_.codebook.norm(2, dim=1).std()
+            writer.add_scalar('phase1/mean_code_norm', mean_code_norm.item(), glb_iter)
+            writer.add_scalar('phase1/std_code_norm', std_code_norm.item(), glb_iter)
+            glb_iter += 1
 
+    writer.close()
 
 def train_phase2(
     train_loader,

@@ -393,9 +393,10 @@ class VectorQuantizer(nn.Module, VectorQuantizerAbc):
         # since the 'volume' of codebook tensors are supposed to be limited.
         # https://github.com/airalcorn2/vqvae-pytorch/blob/021a7d79cbde845dd322bc0b97f37b08230d3cdc/vqvae.py#L173
         self.lim_encodings = 3**0.5
-        self.codebook = torch.tensor(
+        codebook = torch.tensor(
             torch.rand(self.shape_encodings) * self.lim_encodings, requires_grad=True
         )
+        self.register_parameter('codebook', nn.Parameter(codebook))
 
     def forward(self, x):
         # x will have the shape B, D, W, H
@@ -415,16 +416,22 @@ class VectorQuantizer(nn.Module, VectorQuantizerAbc):
         )
         # Bring the D dimension back to idx 1:
         encoding_quantized = encoding_quantized.permute(0, 3, 1, 2)
-        return encoding_quantized, encoding_indices.view(x.shape[0], -1)
 
-    def backward(self, grad_output):
-        """
-        The https://arxiv.org/abs/1711.00937.pdf paper does straight through gradient estimator,
-        for part 1 of the equation 3, the loss for the second part and the 3rd part will be calculated
-        afterwards.
-        """
-        gradinput = F.hardtanh(grad_output)
-        return gradinput
+        dict_loss = ((x.detach()-encoding_quantized) ** 2).mean()
+        comm_loss = ((x-encoding_quantized.detach()) ** 2).mean()
+        encoding_quantized = x + (encoding_quantized - x).detach()  # straight-through grad
+        return (encoding_quantized, encoding_indices.view(x.shape[0], -1),
+                dict_loss, comm_loss)
+
+    # def backward(self, grad_output):
+    #     """
+    #     The https://arxiv.org/abs/1711.00937.pdf paper does straight through gradient estimator,
+    #     for part 1 of the equation 3, the loss for the second part and the 3rd part will be calculated
+    #     afterwards.
+    #     """
+    #     return grad_output.copy()
+    #     gradinput = F.hardtanh(grad_output)
+    #     return gradinput
     
 
     def quantize(self, spatial_feats: SpatialFeats) -> SpatialTokens:
@@ -483,11 +490,11 @@ class ResBlock(nn.Module):
 
         out = self.conv1(x)
         out = self.relu1(out)
+
         out = self.conv2(out)
+        out = out + residual
         out = self.relu2(out)
 
-        out = out + residual
-        out = F.relu(out)
         return out
 
 
@@ -496,18 +503,15 @@ EncoderConvBlock = UNetConvBlock
 class DecoderConvBlock(nn.Module):
     def __init__(self, in_channels):
         super().__init__()
-        self.conv_t_1 = nn.ConvTranspose2d(in_channels, 3, kernel_size=4, stride=2, padding=1)
-        self.batch_norm_1 = nn.BatchNorm2d(3)
-        self.conv_t_2 = nn.ConvTranspose2d(3, 3, kernel_size=4, stride=2, padding=1)
-        self.batch_norm_2 = nn.BatchNorm2d(3)
+        self.conv_t_1 = nn.ConvTranspose2d(in_channels, in_channels, kernel_size=4, stride=2, padding=1)
+        self.batch_norm_1 = nn.BatchNorm2d(in_channels)
+        self.conv_t_2 = nn.ConvTranspose2d(in_channels, 3, kernel_size=4, stride=2, padding=1)
 
     def forward(self, x):
         x = self.conv_t_1(x)
         x = self.batch_norm_1(x)
         x = F.relu(x)
         x = self.conv_t_2(x)
-        x = self.batch_norm_2(x)
-        x = F.relu(x)
         return x
 
 
@@ -515,11 +519,13 @@ class ImageEncoder(ImageEncoderAbc, nn.Module):
     def __init__(self, out_channels, in_channels=3) -> None:
         super().__init__()
         self.conv_block = EncoderConvBlock(in_channels, out_channels, kernel_size=4, stride=2, padding=1)
-        self.res_block = ResBlock(out_channels, out_channels)
+        self.res_block1 = ResBlock(out_channels, out_channels//2)
+        self.res_block2 = ResBlock(out_channels, out_channels//2)
 
     def forward(self, x):
         x = self.conv_block(x)
-        x = self.res_block(x)
+        x = self.res_block1(x)
+        x = self.res_block2(x)
         return x
 
     def encode(self, x):
@@ -529,11 +535,13 @@ class ImageEncoder(ImageEncoderAbc, nn.Module):
 class ImageDecoder(ImageDecoderAbc, nn.Module):
     def __init__(self, in_channels):
         super().__init__()
-        self.res_block = ResBlock(in_channels, in_channels)
+        self.res_block1 = ResBlock(in_channels, in_channels//2)
+        self.res_block2 = ResBlock(in_channels, in_channels//2)
         self.conv_block = DecoderConvBlock(in_channels)
 
     def forward(self, x):
-        x = self.res_block(x)
+        x = self.res_block1(x)
+        x = self.res_block2(x)
         x = self.conv_block(x)
         return x
 
@@ -542,8 +550,8 @@ class ImageDecoder(ImageDecoderAbc, nn.Module):
 
 
 class VqVae(VqVaeAbc):
-    CODEBOOK_DIM = 8
-    CODEBOOK_SIZE = 128
+    CODEBOOK_DIM = 2
+    CODEBOOK_SIZE = 512
 
     LR = 2e-4
     ENCODER_ALPHA = 0.25
@@ -582,7 +590,7 @@ class VqVae(VqVaeAbc):
 
     def encode(self, img) -> SpatialTokens:
         spatial_feats = self.encoder_.encode(img)
-        spatial_tokens, token_indices = self.quantize(spatial_feats)
+        spatial_tokens, token_indices, __, __ = self.quantize(spatial_feats)
         return spatial_tokens, token_indices
 
     def decode(self, spatial_tokens: SpatialTokens) -> ImNetImage:
