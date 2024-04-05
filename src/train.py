@@ -25,6 +25,7 @@ from data import GODLoader, ImageLoader
 from typing import Type
 import itertools
 
+from pathlib import Path 
 # # TODO: change this with tqdm once it was included in the requirement.txt
 # try:
 #     from tqdm import tqdm as tqdm_if_available
@@ -49,10 +50,16 @@ def train_phase1(
     epochs: int,
     beta: float,
     optimizer,
+    log_dir,
+    model_dir
 ):
     # torch.autograd.set_detect_anomaly(True)
+    model_dir = Path(model_dir) / 'phase1'
+    model_dir.mkdir(exist_ok=True, parents=True)
+    log_dir = Path(log_dir)
+    log_dir.mkdir(exist_ok=True, parents=True)
 
-    writer = SummaryWriter()
+    writer = SummaryWriter(log_dir=log_dir)
     glb_iter = 0
 
     for epoch in range(epochs):
@@ -75,13 +82,14 @@ def train_phase1(
                 encoded, __ = vq_vae.encode(train_loader.dataset[1].unsqueeze(0))
                 decoded = vq_vae.decode(encoded).squeeze(0)
                 writer.add_image('phase1/decoded_img', decoded, glb_iter)
-            writer.add_scalar('phase1/loss', loss.item(), glb_iter)
-            mean_code_norm = vq_vae.quantizer_.codebook.norm(2, dim=1).mean()
-            std_code_norm = vq_vae.quantizer_.codebook.norm(2, dim=1).std()
-            writer.add_scalar('phase1/mean_code_norm', mean_code_norm.item(), glb_iter)
-            writer.add_scalar('phase1/std_code_norm', std_code_norm.item(), glb_iter)
+                writer.add_scalar('phase1/loss', loss.item(), glb_iter)
+                mean_code_norm = vq_vae.quantizer_.codebook.norm(2, dim=1).mean()
+                std_code_norm = vq_vae.quantizer_.codebook.norm(2, dim=1).std()
+                writer.add_scalar('phase1/mean_code_norm', mean_code_norm.item(), glb_iter)
+                writer.add_scalar('phase1/std_code_norm', std_code_norm.item(), glb_iter)
             glb_iter += 1
-
+        if epoch % 4 == 0:
+            torch.save(vq_vae.state_dict(), model_dir / 'vq_vae_{}'.format(epoch))
     writer.close()
 
 def train_phase2(
