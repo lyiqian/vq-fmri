@@ -190,12 +190,8 @@ def train_sr(
 
 def inference(godloader:GODLoader, fmri_mlp: MLP, fmri_vqvae:VqVae, sr_module: SuperResolutionModule):
     for idx_batch, (image, fmri) in enumerate(godloader):
-        print(fmri[:,:10])
-        print(fmri.to(torch.float32)[:,0])
-        print(type(fmri[:,0]))
-        print(image.shape)
-        encoded_fmri, _ = fmri_vqvae.encode((fmri_mlp(fmri.to(torch.float32)[:,:10])))
-        print(encoded_fmri.shape)
+        transfmored_fmri = fmri_mlp(fmri.to(torch.float32)[:,:10])
+        encoded_fmri, _ = fmri_vqvae.encode(transfmored_fmri)
         output = sr_module(encoded_fmri)
         print(output.shape)
 
@@ -248,7 +244,7 @@ def train_general():
     )
     beta = 2
     # train_sr(train_loader, sr_module, vq_vae_large, epochs, beta)
-    fmri_mlp = MLP(10, 8)
+    fmri_mlp = MLP(10, 32)
     inference(train_loader, fmri_mlp, vq_vae_fmri, sr_module)
 
 train_general()
