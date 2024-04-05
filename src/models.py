@@ -423,6 +423,7 @@ class VectorQuantizer(nn.Module, VectorQuantizerAbc):
         for part 1 of the equation 3, the loss for the second part and the 3rd part will be calculated
         afterwards.
         """
+        return grad_output.copy()
         gradinput = F.hardtanh(grad_output)
         return gradinput
     
