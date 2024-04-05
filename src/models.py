@@ -506,15 +506,12 @@ class DecoderConvBlock(nn.Module):
         self.conv_t_1 = nn.ConvTranspose2d(in_channels, in_channels, kernel_size=4, stride=2, padding=1)
         self.batch_norm_1 = nn.BatchNorm2d(in_channels)
         self.conv_t_2 = nn.ConvTranspose2d(in_channels, 3, kernel_size=4, stride=2, padding=1)
-        self.batch_norm_2 = nn.BatchNorm2d(3)
 
     def forward(self, x):
         x = self.conv_t_1(x)
         x = self.batch_norm_1(x)
         x = F.relu(x)
         x = self.conv_t_2(x)
-        x = self.batch_norm_2(x)
-        x = F.relu(x)
         return x
 
 
