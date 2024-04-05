@@ -497,9 +497,9 @@ EncoderConvBlock = UNetConvBlock
 class DecoderConvBlock(nn.Module):
     def __init__(self, in_channels):
         super().__init__()
-        self.conv_t_1 = nn.ConvTranspose2d(in_channels, 3, kernel_size=4, stride=2, padding=1)
-        self.batch_norm_1 = nn.BatchNorm2d(3)
-        self.conv_t_2 = nn.ConvTranspose2d(3, 3, kernel_size=4, stride=2, padding=1)
+        self.conv_t_1 = nn.ConvTranspose2d(in_channels, in_channels, kernel_size=4, stride=2, padding=1)
+        self.batch_norm_1 = nn.BatchNorm2d(in_channels)
+        self.conv_t_2 = nn.ConvTranspose2d(in_channels, 3, kernel_size=4, stride=2, padding=1)
         self.batch_norm_2 = nn.BatchNorm2d(3)
 
     def forward(self, x):
