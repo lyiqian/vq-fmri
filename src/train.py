@@ -68,7 +68,7 @@ def train_phase1(
             loss.backward()
             optimizer.step()
 
-            if i % 1000 == 0:
+            if glb_iter % 1000 == 0:
                 print(f"Loss @ Ep{epoch} Batch{i}: {loss.item()}")
                 encoded, __ = vq_vae.encode(train_loader.dataset[1].unsqueeze(0))
                 decoded = vq_vae.decode(encoded).squeeze(0)
