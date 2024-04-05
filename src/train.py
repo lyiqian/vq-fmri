@@ -30,6 +30,14 @@ import itertools
 #         return args
 
 
+
+# Pipeline of training:
+# Phase 1: Train the image vq-vae
+# Phase 2: Inpainting and token classifier 
+# Phase 3: Train fmri vq-vqe
+# Phase 4: Train SR module
+
+
 def train_phase1(
     train_loader,
     validation_loader,
