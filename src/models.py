@@ -483,11 +483,11 @@ class ResBlock(nn.Module):
 
         out = self.conv1(x)
         out = self.relu1(out)
+
         out = self.conv2(out)
+        out = out + residual
         out = self.relu2(out)
 
-        out = out + residual
-        out = F.relu(out)
         return out
 
 
