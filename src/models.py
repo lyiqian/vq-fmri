@@ -415,17 +415,22 @@ class VectorQuantizer(nn.Module, VectorQuantizerAbc):
         )
         # Bring the D dimension back to idx 1:
         encoding_quantized = encoding_quantized.permute(0, 3, 1, 2)
-        return encoding_quantized, encoding_indices.view(x.shape[0], -1)
 
-    def backward(self, grad_output):
-        """
-        The https://arxiv.org/abs/1711.00937.pdf paper does straight through gradient estimator,
-        for part 1 of the equation 3, the loss for the second part and the 3rd part will be calculated
-        afterwards.
-        """
-        return grad_output.copy()
-        gradinput = F.hardtanh(grad_output)
-        return gradinput
+        dict_loss = ((x.detach()-encoding_quantized) ** 2).mean()
+        comm_loss = ((x-encoding_quantized.detach()) ** 2).mean()
+        encoding_quantized = x + (encoding_quantized - x).detach()  # straight-through grad
+        return (encoding_quantized, encoding_indices.view(x.shape[0], -1),
+                dict_loss, comm_loss)
+
+    # def backward(self, grad_output):
+    #     """
+    #     The https://arxiv.org/abs/1711.00937.pdf paper does straight through gradient estimator,
+    #     for part 1 of the equation 3, the loss for the second part and the 3rd part will be calculated
+    #     afterwards.
+    #     """
+    #     return grad_output.copy()
+    #     gradinput = F.hardtanh(grad_output)
+    #     return gradinput
     
 
     def quantize(self, spatial_feats: SpatialFeats) -> SpatialTokens:
@@ -587,7 +592,7 @@ class VqVae(VqVaeAbc):
 
     def encode(self, img) -> SpatialTokens:
         spatial_feats = self.encoder_.encode(img)
-        spatial_tokens, token_indices = self.quantize(spatial_feats)
+        spatial_tokens, token_indices, __, __ = self.quantize(spatial_feats)
         return spatial_tokens, token_indices
 
     def decode(self, spatial_tokens: SpatialTokens) -> ImNetImage:

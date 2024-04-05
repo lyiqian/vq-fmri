@@ -17,6 +17,7 @@ from models import (
 from losses import lossVQ, lossVQ_MSE, lossSR
 from models import TokenNoising, TokenClassifier, InpaintingNetwork, VqVae, VqVaeAbc, FMRIEncoderAbc, UNet
 from torch.nn import CrossEntropyLoss, BCELoss
+from torch.nn.functional import mse_loss
 from torch.utils.tensorboard import SummaryWriter
 
 from data import GODLoader, ImageLoader
@@ -62,9 +63,10 @@ def train_phase1(
             # Learn Codebook
             # Quantize encodigns
             img_encs = vq_vae.encoder_.encode(images)
-            img_encs_q, img_encs_idxs = vq_vae.quantizer_.quantize(img_encs)
+            img_encs_q, __, dict_loss, comm_loss = vq_vae.quantizer_.quantize(img_encs)
             img_rec = vq_vae.decoder_.decode(img_encs_q)
-            loss = lossVQ(images, img_rec, img_encs, img_encs_q, beta)
+            # loss = lossVQ(images, img_rec, img_encs, img_encs_q, beta)
+            loss = 20 * mse_loss(images, img_rec) + dict_loss + beta*comm_loss
             loss.backward()
             optimizer.step()
 
