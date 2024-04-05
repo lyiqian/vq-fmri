@@ -76,6 +76,10 @@ def train_phase1(
                 decoded = vq_vae.decode(encoded).squeeze(0)
                 writer.add_image('phase1/decoded_img', decoded, glb_iter)
             writer.add_scalar('phase1/loss', loss.item(), glb_iter)
+            mean_code_norm = vq_vae.quantizer_.codebook.norm(2, dim=1).mean()
+            std_code_norm = vq_vae.quantizer_.codebook.norm(2, dim=1).std()
+            writer.add_scalar('phase1/mean_code_norm', mean_code_norm.item(), glb_iter)
+            writer.add_scalar('phase1/std_code_norm', std_code_norm.item(), glb_iter)
             glb_iter += 1
 
     writer.close()
