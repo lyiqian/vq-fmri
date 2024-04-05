@@ -393,9 +393,10 @@ class VectorQuantizer(nn.Module, VectorQuantizerAbc):
         # since the 'volume' of codebook tensors are supposed to be limited.
         # https://github.com/airalcorn2/vqvae-pytorch/blob/021a7d79cbde845dd322bc0b97f37b08230d3cdc/vqvae.py#L173
         self.lim_encodings = 3**0.5
-        self.codebook = torch.tensor(
+        codebook = torch.tensor(
             torch.rand(self.shape_encodings) * self.lim_encodings, requires_grad=True
         )
+        self.register_parameter('codebook', nn.Parameter(codebook))
 
     def forward(self, x):
         # x will have the shape B, D, W, H
