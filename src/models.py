@@ -563,30 +563,7 @@ class VqVae(VqVaeAbc):
         self.quantizer_ = VectorQuantizer(dim_encodings=self.CODEBOOK_DIM, num_encodings=self.CODEBOOK_SIZE)
 
     def fit(self, img_dataset: ImageDataset):
-        loader = torch.utils.data.DataLoader(img_dataset, batch_size=32)
-
-        params = itertools.chain(
-            self.encoder_.parameters(),
-            self.quantizer_.parameters(),
-            self.decoder_.parameters())
-        optimizer = torch.optim.Adam(params, lr=self.LR)
-
-        for epoch in range(100):
-            print("Training Epoch", epoch)
-            for orig in loader:
-                spatial_feats = self.encoder_.encode(orig)
-                spatial_tokens, __ = self.quantizer_.quantize(spatial_feats)
-                reconstructed = self.decoder_.decode(spatial_tokens)
-
-                loss = (
-                    (reconstructed - orig).norm(2)
-                    + (spatial_feats.detach() - spatial_tokens).norm(2)
-                    + (spatial_tokens.detach() - spatial_feats).norm(2) * self.ENCODER_ALPHA
-                )
-                loss.backward()
-
-                optimizer.step()
-                optimizer.zero_grad()
+        pass # not used; check train phase_1 instead
 
     def encode(self, img) -> SpatialTokens:
         spatial_feats = self.encoder_.encode(img)
@@ -600,6 +577,16 @@ class VqVae(VqVaeAbc):
         # Returns both quantized vecotrs and indexes!
         # TODO: fix typing annotations
         return self.quantizer_.quantize(spatial_feats)
+
+    def save(self, dirname, epoch):
+        torch.save(self.encoder_.state_dict(), f'{dirname}/encoder-epoch-{epoch}.pth')
+        torch.save(self.decoder_.state_dict(), f'{dirname}/decoder-epoch-{epoch}.pth')
+        torch.save(self.quantizer_.state_dict(), f'{dirname}/quantizer-epoch-{epoch}.pth')
+
+    def load(self, dirname, epoch):
+        self.encoder_.load_state_dict(torch.load(f'{dirname}/encoder-epoch-{epoch}.pth'))
+        self.decoder_.load_state_dict(torch.load(f'{dirname}/decoder-epoch-{epoch}.pth'))
+        self.quantizer_.load_state_dict(torch.load(f'{dirname}/quantizer-epoch-{epoch}.pth'))
 
 
 class Denoiser(DenoiserAbc):
