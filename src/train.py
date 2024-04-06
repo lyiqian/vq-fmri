@@ -106,7 +106,7 @@ def train_phase1(
             img_encs_q, __, dict_loss, comm_loss = vq_vae.quantizer_.quantize(img_encs)
             img_rec = vq_vae.decoder_.decode(img_encs_q)
             # loss = lossVQ(images, img_rec, img_encs, img_encs_q, beta)
-            loss = 20 * mse_loss(images, img_rec) + dict_loss + beta * comm_loss
+            loss = mse_loss(images, img_rec) + dict_loss + beta*comm_loss
             loss.backward()
             optimizer.step()
 
