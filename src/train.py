@@ -87,7 +87,7 @@ def train_phase1(
                 writer.add_scalar('phase1/mean_code_norm', mean_code_norm.item(), glb_iter)
             glb_iter += 1
         if epoch % 4 == 0:
-            torch.save(vq_vae.state_dict(), model_dir / 'vq_vae_{}'.format(epoch))
+            vq_vae.save(dirname='states', epoch=epoch)
     writer.close()
 
 def train_phase2(
