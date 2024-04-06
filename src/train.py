@@ -84,12 +84,10 @@ def train_phase1(
                 writer.add_image('phase1/decoded_img', decoded, glb_iter)
                 writer.add_scalar('phase1/loss', loss.item(), glb_iter)
                 mean_code_norm = vq_vae.quantizer_.codebook.norm(2, dim=1).mean()
-                std_code_norm = vq_vae.quantizer_.codebook.norm(2, dim=1).std()
                 writer.add_scalar('phase1/mean_code_norm', mean_code_norm.item(), glb_iter)
-                writer.add_scalar('phase1/std_code_norm', std_code_norm.item(), glb_iter)
             glb_iter += 1
         if epoch % 4 == 0:
-            torch.save(vq_vae.state_dict(), model_dir / 'vq_vae_{}'.format(epoch))
+            vq_vae.save(dirname=model_dir, epoch=epoch)
     writer.close()
 
 def train_phase2(
@@ -280,4 +278,4 @@ def train_general():
     fmri_mlp = MLP(10, 32)
     inference(train_loader, fmri_mlp, vq_vae_fmri, sr_module)
 
-train_general()
+# train_general()
