@@ -550,8 +550,8 @@ class ImageDecoder(ImageDecoderAbc, nn.Module):
 
 
 class VqVae(VqVaeAbc):
-    CODEBOOK_DIM = 2
-    CODEBOOK_SIZE = 512
+    CODEBOOK_DIM = 8
+    CODEBOOK_SIZE = 128
 
     LR = 2e-4
     ENCODER_ALPHA = 0.25
