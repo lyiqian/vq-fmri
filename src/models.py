@@ -563,7 +563,7 @@ class VqVae(nn.Module):
         self.quantizer_ = VectorQuantizer(dim_encodings=self.CODEBOOK_DIM, num_encodings=self.CODEBOOK_SIZE)
 
     def fit(self, img_dataset: ImageDataset):
-        pass
+        pass # not used; check train phase_1 instead
 
     def encode(self, img) -> SpatialTokens:
         spatial_feats = self.encoder_.encode(img)
@@ -577,6 +577,16 @@ class VqVae(nn.Module):
         # Returns both quantized vecotrs and indexes!
         # TODO: fix typing annotations
         return self.quantizer_.quantize(spatial_feats)
+
+    def save(self, dirname, epoch):
+        torch.save(self.encoder_.state_dict(), f'{dirname}/encoder-epoch-{epoch}.pth')
+        torch.save(self.decoder_.state_dict(), f'{dirname}/decoder-epoch-{epoch}.pth')
+        torch.save(self.quantizer_.state_dict(), f'{dirname}/quantizer-epoch-{epoch}.pth')
+
+    def load(self, dirname, epoch):
+        self.encoder_.load_state_dict(torch.load(f'{dirname}/encoder-epoch-{epoch}.pth'))
+        self.decoder_.load_state_dict(torch.load(f'{dirname}/decoder-epoch-{epoch}.pth'))
+        self.quantizer_.load_state_dict(torch.load(f'{dirname}/quantizer-epoch-{epoch}.pth'))
 
 
 class Denoiser(DenoiserAbc):
