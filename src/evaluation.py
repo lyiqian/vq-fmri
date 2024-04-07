@@ -18,7 +18,6 @@ def pcc(orig: np.ndarray, rec: np.ndarray):
 
 SSIM_WINDOW_SIZE = 3
 
-
 def ssim(orig: np.ndarray, rec: np.ndarray):
     """Structural similarity index.
 
@@ -28,7 +27,6 @@ def ssim(orig: np.ndarray, rec: np.ndarray):
     eps1, eps2 = 1e-6, 1e-6
     rad = SSIM_WINDOW_SIZE // 2
 
-    print(orig.shape)
     local_ssim = []
     for i in range(rad, orig.shape[0]-rad):
         for j in range(rad, orig.shape[1]-rad):
@@ -50,6 +48,23 @@ def ssim(orig: np.ndarray, rec: np.ndarray):
     return global_ssim
 
 
+def psnr(orig: np.ndarray, rec: np.ndarray):
+    """Peak signal-to-noise ratio.
+
+    https://en.wikipedia.org/wiki/Peak_signal-to-noise_ratio"""
+    if orig.dtype == float:
+        orig = (orig*255).astype(int)
+    if rec.dtype == float:
+        rec = (rec*255).astype(int)
+    orig = orig.ravel()
+    rec = rec.ravel()
+
+    mse = np.mean((orig-rec)**2)
+    max_values = 255
+    psnr = 10 * np.log10(max_values**2 / mse)
+    return psnr
+
+
 # import pathlib
 # import matplotlib.pyplot as plt
 
@@ -60,3 +75,4 @@ def ssim(orig: np.ndarray, rec: np.ndarray):
 
 # print("PCC", pcc(img1, img2))
 # print("SSIM", ssim(img1, img2))
+# print("PSNR", psnr(img1, img2))
