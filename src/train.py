@@ -19,6 +19,8 @@ from models import TokenNoising, TokenClassifier, InpaintingNetwork, VqVae, VqVa
 from torch.nn import CrossEntropyLoss, BCELoss
 from torch.nn.functional import mse_loss
 from torch.utils.tensorboard import SummaryWriter
+from torchvision.utils import make_grid
+import numpy as np
 
 from data import GODLoader, ImageLoader
 
@@ -32,7 +34,7 @@ from pathlib import Path
 # except:
 #     def tqdm_if_available(*args):
 #         return args
-
+from tqdm import tqdm
 
 
 # Pipeline of training:
@@ -41,6 +43,14 @@ from pathlib import Path
 # Phase 3: Train fmri vq-vqe
 # Phase 4: Train SR module
 
+if torch.cuda.is_available():
+    device = "cuda"
+elif torch.backends.mps.is_available():
+    device = "mps"
+else:
+    device = "cpu"
+print('Device in use is {}'.format(device))
+device = torch.device(device)
 
 def train_phase1(
     train_loader,
@@ -49,21 +59,35 @@ def train_phase1(
     vq_vae: VqVae,
     epochs: int,
     beta: float,
-    optimizer,
     log_dir,
     model_dir
 ):
     # torch.autograd.set_detect_anomaly(True)
     model_dir = Path(model_dir) / 'phase1'
     model_dir.mkdir(exist_ok=True, parents=True)
-    log_dir = Path(log_dir)
+    log_dir = Path(log_dir) / 'phase1'
     log_dir.mkdir(exist_ok=True, parents=True)
+
 
     writer = SummaryWriter(log_dir=log_dir)
     glb_iter = 0
+    # params = itertools.chain(
+    #     vq_vae.encoder_.parameters(),
+    #     vq_vae.quantizer_.parameters(),
+    #     vq_vae.decoder_.parameters())
+    # test_data = train_loader.dataset[1].unsqueeze(0).to(device)
+    test_data = next(iter(train_loader)).to(device)
+    optimizer = torch.optim.Adam(vq_vae.parameters(), lr=vq_vae.LR)
+
+    vq_vae = vq_vae.to(device)
+    vq_vae.load_state_dict(torch.load(model_dir / 'vq_vae_64000.pth'))
+    vq_vae.train()
+    optimizer.load_state_dict(torch.load(model_dir / 'vq_vae_opt_64000.pth'))
+    glb_iter = 64001
 
     for epoch in range(epochs):
-        for i, images in enumerate(train_loader):
+        for i, images in tqdm(enumerate(train_loader)):
+            images = images.to(device)
             optimizer.zero_grad()
             # VQVQE part:
             # Encode image
@@ -79,17 +103,20 @@ def train_phase1(
 
             if glb_iter % 1000 == 0:
                 print(f"Loss @ Ep{epoch} Batch{i}: {loss.item()}")
-                encoded, __ = vq_vae.encode(train_loader.dataset[1].unsqueeze(0))
+                encoded, __ = vq_vae.encode(test_data)
                 decoded = vq_vae.decode(encoded).squeeze(0)
-                writer.add_image('phase1/decoded_img', decoded, glb_iter)
+                grid = make_grid(decoded.cpu().data)
+                writer.add_image('phase1/decoded_img', grid, glb_iter)
                 writer.add_scalar('phase1/loss', loss.item(), glb_iter)
                 mean_code_norm = vq_vae.quantizer_.codebook.norm(2, dim=1).mean()
                 std_code_norm = vq_vae.quantizer_.codebook.norm(2, dim=1).std()
                 writer.add_scalar('phase1/mean_code_norm', mean_code_norm.item(), glb_iter)
                 writer.add_scalar('phase1/std_code_norm', std_code_norm.item(), glb_iter)
+            if glb_iter % 2000 == 0:
+                torch.save(vq_vae.state_dict(), model_dir / 'vq_vae_{}.pth'.format(glb_iter))
+                torch.save(optimizer.state_dict(), model_dir / 'vq_vae_opt_{}.pth'.format(glb_iter))
             glb_iter += 1
-        if epoch % 4 == 0:
-            torch.save(vq_vae.state_dict(), model_dir / 'vq_vae_{}'.format(epoch))
+
     writer.close()
 
 def train_phase2(
@@ -280,4 +307,4 @@ def train_general():
     fmri_mlp = MLP(10, 32)
     inference(train_loader, fmri_mlp, vq_vae_fmri, sr_module)
 
-train_general()
+# train_general()

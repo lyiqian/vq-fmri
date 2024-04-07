@@ -498,7 +498,7 @@ class ResBlock(nn.Module):
         return out
 
 
-EncoderConvBlock = UNetConvBlock
+# EncoderConvBlock = UNetConvBlock
 
 class DecoderConvBlock(nn.Module):
     def __init__(self, in_channels):
@@ -518,7 +518,7 @@ class DecoderConvBlock(nn.Module):
 class ImageEncoder(ImageEncoderAbc, nn.Module):
     def __init__(self, out_channels, in_channels=3) -> None:
         super().__init__()
-        self.conv_block = EncoderConvBlock(in_channels, out_channels, kernel_size=4, stride=2, padding=1)
+        self.conv_block = UNetConvBlock(in_channels, out_channels, kernel_size=4, stride=2, padding=1)
         self.res_block1 = ResBlock(out_channels, out_channels//2)
         self.res_block2 = ResBlock(out_channels, out_channels//2)
 
@@ -549,9 +549,9 @@ class ImageDecoder(ImageDecoderAbc, nn.Module):
         return self.forward(x)
 
 
-class VqVae(VqVaeAbc):
-    CODEBOOK_DIM = 2
-    CODEBOOK_SIZE = 512
+class VqVae(nn.Module):
+    CODEBOOK_DIM = 8
+    CODEBOOK_SIZE = 128
 
     LR = 2e-4
     ENCODER_ALPHA = 0.25
@@ -563,30 +563,7 @@ class VqVae(VqVaeAbc):
         self.quantizer_ = VectorQuantizer(dim_encodings=self.CODEBOOK_DIM, num_encodings=self.CODEBOOK_SIZE)
 
     def fit(self, img_dataset: ImageDataset):
-        loader = torch.utils.data.DataLoader(img_dataset, batch_size=32)
-
-        params = itertools.chain(
-            self.encoder_.parameters(),
-            self.quantizer_.parameters(),
-            self.decoder_.parameters())
-        optimizer = torch.optim.Adam(params, lr=self.LR)
-
-        for epoch in range(100):
-            print("Training Epoch", epoch)
-            for orig in loader:
-                spatial_feats = self.encoder_.encode(orig)
-                spatial_tokens, __ = self.quantizer_.quantize(spatial_feats)
-                reconstructed = self.decoder_.decode(spatial_tokens)
-
-                loss = (
-                    (reconstructed - orig).norm(2)
-                    + (spatial_feats.detach() - spatial_tokens).norm(2)
-                    + (spatial_tokens.detach() - spatial_feats).norm(2) * self.ENCODER_ALPHA
-                )
-                loss.backward()
-
-                optimizer.step()
-                optimizer.zero_grad()
+        pass
 
     def encode(self, img) -> SpatialTokens:
         spatial_feats = self.encoder_.encode(img)
