@@ -72,7 +72,7 @@ class GODDataset(Dataset):
 class GODLoader():
     def __init__(self, data_dir, batch_size=16) -> None:
         image_transforms = transforms.Compose([
-            transforms.Resize((512, 512)),      # Resize the image to 256x256 pixels
+            transforms.Resize((64, 64)),      # Resize the image to 64x64 pixels
             transforms.ToTensor(),              # Convert the image to a PyTorch tensor
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),  # Normalize with ImageNet stats
         ])
