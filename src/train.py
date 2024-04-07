@@ -12,10 +12,18 @@ from models import (
     FMRIEncoderAbc,
     UNet,
     SuperResolutionModule,
-    MLP
+    MLP,
 )
 from losses import lossVQ, lossVQ_MSE, lossSR
-from models import TokenNoising, TokenClassifier, InpaintingNetwork, VqVae, VqVaeAbc, FMRIEncoderAbc, UNet
+from models import (
+    TokenNoising,
+    TokenClassifier,
+    InpaintingNetwork,
+    VqVae,
+    VqVaeAbc,
+    FMRIEncoderAbc,
+    UNet,
+)
 from torch.nn import CrossEntropyLoss, BCELoss
 from torch.nn.functional import mse_loss
 from torch.utils.tensorboard import SummaryWriter
@@ -27,7 +35,8 @@ from data import GODLoader, ImageLoader
 from typing import Type
 import itertools
 
-from pathlib import Path 
+from pathlib import Path
+
 # # TODO: change this with tqdm once it was included in the requirement.txt
 # try:
 #     from tqdm import tqdm as tqdm_if_available
@@ -39,7 +48,7 @@ from tqdm import tqdm
 
 # Pipeline of training:
 # Phase 1: Train the image vq-vae
-# Phase 2: Inpainting and token classifier 
+# Phase 2: Inpainting and token classifier
 # Phase 3: Train fmri vq-vqe
 # Phase 4: Train SR module
 
@@ -49,8 +58,9 @@ elif torch.backends.mps.is_available():
     device = "mps"
 else:
     device = "cpu"
-print('Device in use is {}'.format(device))
+print("Device in use is {}".format(device))
 device = torch.device(device)
+
 
 def train_phase1(
     train_loader,
@@ -60,14 +70,13 @@ def train_phase1(
     epochs: int,
     beta: float,
     log_dir,
-    model_dir
+    model_dir,
 ):
     # torch.autograd.set_detect_anomaly(True)
-    model_dir = Path(model_dir) / 'phase1'
+    model_dir = Path(model_dir) / "phase1"
     model_dir.mkdir(exist_ok=True, parents=True)
-    log_dir = Path(log_dir) / 'phase1'
+    log_dir = Path(log_dir) / "phase1"
     log_dir.mkdir(exist_ok=True, parents=True)
-
 
     writer = SummaryWriter(log_dir=log_dir)
     glb_iter = 0
@@ -80,9 +89,9 @@ def train_phase1(
     optimizer = torch.optim.Adam(vq_vae.parameters(), lr=vq_vae.LR)
 
     vq_vae = vq_vae.to(device)
-    vq_vae.load_state_dict(torch.load(model_dir / 'vq_vae_64000.pth'))
+    vq_vae.load_state_dict(torch.load(model_dir / "vq_vae_64000.pth"))
     vq_vae.train()
-    optimizer.load_state_dict(torch.load(model_dir / 'vq_vae_opt_64000.pth'))
+    optimizer.load_state_dict(torch.load(model_dir / "vq_vae_opt_64000.pth"))
     glb_iter = 64001
 
     for epoch in range(epochs):
@@ -97,7 +106,7 @@ def train_phase1(
             img_encs_q, __, dict_loss, comm_loss = vq_vae.quantizer_.quantize(img_encs)
             img_rec = vq_vae.decoder_.decode(img_encs_q)
             # loss = lossVQ(images, img_rec, img_encs, img_encs_q, beta)
-            loss = 20 * mse_loss(images, img_rec) + dict_loss + beta*comm_loss
+            loss = 20 * mse_loss(images, img_rec) + dict_loss + beta * comm_loss
             loss.backward()
             optimizer.step()
 
@@ -106,14 +115,17 @@ def train_phase1(
                 encoded, __ = vq_vae.encode(test_data)
                 decoded = vq_vae.decode(encoded).squeeze(0)
                 grid = make_grid(decoded.cpu().data)
-                writer.add_image('phase1/decoded_img', grid, glb_iter)
-                writer.add_scalar('phase1/loss', loss.item(), glb_iter)
+                writer.add_image("phase1/decoded_img", grid, glb_iter)
+                writer.add_scalar("phase1/loss", loss.item(), glb_iter)
                 mean_code_norm = vq_vae.quantizer_.codebook.norm(2, dim=1).mean()
-                writer.add_scalar('phase1/mean_code_norm', mean_code_norm.item(), glb_iter)
+                writer.add_scalar(
+                    "phase1/mean_code_norm", mean_code_norm.item(), glb_iter
+                )
             glb_iter += 1
         if epoch % 4 == 0:
             vq_vae.save(dirname=model_dir, epoch=epoch)
     writer.close()
+
 
 def train_phase2(
     train_loader,
@@ -130,7 +142,9 @@ def train_phase2(
             fmri_feats = fmri_encoder(fmris)
             fmri_tokens, fmri_codebook_idxs = trained_vq_vae.quantize(fmri_feats)
             img_tokens, img_codebook_idxs = trained_vq_vae.encode(images)
-            loss = lossVQ_MSE(fmri_feats, fmri_codebook_idxs, img_tokens, img_codebook_idxs)
+            loss = lossVQ_MSE(
+                fmri_feats, fmri_codebook_idxs, img_tokens, img_codebook_idxs
+            )
 
             loss.backward()
             optimizer.step()
@@ -139,41 +153,50 @@ def train_phase2(
 
 
 def train_phase3(
-    train_loader: GODLoader,
-    validation_loader: GODLoader,
-    test_loader: GODLoader,
+    train_loader: ImageLoader,
+    # validation_loader: GODLoader,
+    # test_loader: GODLoader,
     epochs: int,
     trained_vq_vae: VqVaeAbc,
     token_classifier: TokenClassifier,
     token_inpainting: InpaintingNetwork,
     beta: float,
-    lr: float = 0.01,
+    lr: float,
+    log_dir: str,
+    model_dir: str,
 ):
     # TODO: noise rate should be set same as error rate in fMRI, we should look up what that value is!
     # TODO: Maybe increasing the noise rate gradually would be beneficial?
 
-    # Train Token Classifier
-    # Train Token Inpaingting
-    # Decode image
-    # Calculate the losses
+    # torch.autograd.set_detect_anomaly(True)
+    model_dir = Path(model_dir) / "phase3"
+    model_dir.mkdir(exist_ok=True, parents=True)
+    log_dir = Path(log_dir) / "phase3"
+    log_dir.mkdir(exist_ok=True, parents=True)
+
+    # Logging stuff:
+    writer = SummaryWriter(log_dir=log_dir)
+    glb_iter = 0
+
     tk = TokenNoising(noise_rate=0.3)
     ce_loss = BCELoss()
     token_classifier_optimizer = torch.optim.Adam(token_classifier.parameters(), lr=lr)
     token_inpainting_optimizer = torch.optim.Adam(token_inpainting.parameters(), lr=lr)
 
     for epoch in range(epochs):
-        for i, (images, _) in enumerate(train_loader):
+
+        for images in tqdm(train_loader):
             token_classifier_optimizer.zero_grad()
             token_inpainting_optimizer.zero_grad()
-            img_encs_q, img_encs_idxs = trained_vq_vae.encode(images)
             with torch.no_grad():
+                img_encs_q, img_encs_idxs = trained_vq_vae.encode(images)
                 noisy_encs, noise_mask = tk(img_encs_q)
             enc_idx_preds = token_classifier(noisy_encs)
             enc_val_preds = token_inpainting(noisy_encs, noise_mask)
             with torch.no_grad():
-                _, env_val_preds_q_idxs = trained_vq_vae.quantizer_.quantize(enc_val_preds)
-            # print(enc_idx_preds.shape)
-            # print(noise_mask.shape)
+                _, env_val_preds_q_idxs, _, _ = trained_vq_vae.quantizer_.quantize(
+                    enc_val_preds
+                )
             idx_pred_loss = ce_loss(
                 enc_idx_preds,
                 noise_mask.view(noise_mask.shape[0], 1, *noise_mask.shape[1:]),
@@ -189,8 +212,28 @@ def train_phase3(
             val_pred_loss.backward()
             token_classifier_optimizer.step()
             token_inpainting_optimizer.step()
+            if glb_iter % 1000 == 0:
+                writer.add_scalar("phase3/index_loss", idx_pred_loss.item(), glb_iter)
+                writer.add_scalar("phase3/value_loss", val_pred_loss.item(), glb_iter)
+            glb_iter += 1
 
-
+        if epoch % 4 == 0:
+            torch.save(
+                token_classifier.state_dict(),
+                model_dir / "token_classifier_{}.pth".format(epoch),
+            )
+            torch.save(
+                token_inpainting.state_dict(),
+                model_dir / "token_inpainting_{}.pth".format(epoch),
+            )
+            torch.save(
+                token_classifier_optimizer.state_dict(),
+                model_dir / "token_classifier_opt_{}.pth".format(epoch),
+            )
+            torch.save(
+                token_inpainting_optimizer.state_dict(),
+                model_dir / "token_inpainting_opt_{}.pth".format(epoch),
+            )
 
 
 def train_sr(
@@ -198,7 +241,7 @@ def train_sr(
     sr_module: SuperResolutionModule,
     vq_vae_large: VqVae,
     epochs: int,
-    beta:float
+    beta: float,
 ):
     """Eventhough the main paper divides the training into 3 main phases,
     there is also a 4th phase for training the super resolution modules
@@ -244,9 +287,14 @@ def train_sr(
             optimizer_sr.step()
 
 
-def inference(godloader:GODLoader, fmri_mlp: MLP, fmri_vqvae:VqVae, sr_module: SuperResolutionModule):
+def inference(
+    godloader: GODLoader,
+    fmri_mlp: MLP,
+    fmri_vqvae: VqVae,
+    sr_module: SuperResolutionModule,
+):
     for idx_batch, (image, fmri) in enumerate(godloader):
-        transfmored_fmri = fmri_mlp(fmri.to(torch.float32)[:,:10])
+        transfmored_fmri = fmri_mlp(fmri.to(torch.float32)[:, :10])
         encoded_fmri, _ = fmri_vqvae.encode(transfmored_fmri)
         output = sr_module(encoded_fmri)
         print(output.shape)
@@ -302,5 +350,6 @@ def train_general():
     # train_sr(train_loader, sr_module, vq_vae_large, epochs, beta)
     fmri_mlp = MLP(10, 32)
     inference(train_loader, fmri_mlp, vq_vae_fmri, sr_module)
+
 
 # train_general()

@@ -4,9 +4,9 @@ import matplotlib.pyplot as plt
 import torch
 
 from data import GODLoader, ImageLoader
-from train import train_phase1, train_phase2
+from train import train_phase1, train_phase2, train_phase3
 import models
-
+from pathlib import Path 
 # for reproducability:
 import torch
 torch.manual_seed(0)
@@ -24,27 +24,42 @@ def main():
     parser.add_argument("-r", "--img-dec", type=str, default="img_dec")
     parser.add_argument("-l", "--log_dir", type=str, default="../logs/")
     parser.add_argument("-m", "--model_dir", type=str, default="../models/")
+    parser.add_argument('-p', '--phase', type=str, default='phase1')
     args = parser.parse_args()
 
     # load test fMRI
     # fmri_ds = data.GODDataset(args.data_dir, image_transforms=None, split='test')
     # fmri = torch.stack([f for __, f in fmri_ds])
-    image_loader = ImageLoader(data_dir=args.data_dir, batch_size=16)
-    train_loader = image_loader.get_train_loader()
-    vq_vae = models.VqVae()
-    epochs = 50
-    beta = 1
-    # train_phase2(image_loader, epochs, vq_vae, )
-    train_phase1(
-        train_loader,
-        None,
-        None,
-        vq_vae,
-        epochs,
-        beta,
-        log_dir=args.log_dir,
-        model_dir=args.model_dir,
-    )
+    if args.phase == 'phase1':
+        image_loader = ImageLoader(data_dir=args.data_dir, batch_size=16)
+        train_loader = image_loader.get_train_loader()
+        vq_vae = models.VqVae()
+        epochs = 50
+        beta = 1
+        # train_phase2(image_loader, epochs, vq_vae, )
+        train_phase1(
+            train_loader,
+            None,
+            None,
+            vq_vae,
+            epochs,
+            beta,
+            log_dir=args.log_dir,
+            model_dir=args.model_dir,
+        )
+    if args.phase == 'phase3':
+        trained_vq_vae = models.VqVae()
+        trained_vq_vae.load(args.model_dir, 4)
+        epochs = 50
+        beta = 1
+        image_loader = ImageLoader(data_dir=args.data_dir, batch_size=16)
+        train_loader = image_loader.get_train_loader()
+        token_classifier = models.TokenClassifier()
+        token_inpainting = models.InpaintingNetwork(trained_vq_vae.CODEBOOK_DIM)
+        lr = 1e-3
+        train_phase3(
+            train_loader, epochs, trained_vq_vae, token_classifier, token_inpainting, beta, lr, args.log_dir, args.model_dir
+        )
     # # load networks
     # vq = models.VectorQuantizer()
     # fmri_enc = models.FMRIEncoder()
