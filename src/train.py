@@ -137,11 +137,12 @@ def train_phase2(
     optimizer = torch.optim.Adam(fmri_encoder.parameters(), lr=2e-4)
 
     for ep in range(epochs):
+        print("Epoch", ep)
         for images, fmris in train_loader:
             optimizer.zero_grad()
 
             fmri_feats = fmri_encoder(fmris)
-            fmri_tokens, fmri_codebook_idxs = trained_vq_vae.quantize(fmri_feats)
+            fmri_tokens, fmri_codebook_idxs, __, __ = trained_vq_vae.quantize(fmri_feats)
             img_tokens, img_codebook_idxs = trained_vq_vae.encode(images)
             loss = lossVQ_MSE(
                 fmri_feats, fmri_codebook_idxs, img_tokens.detach(), img_codebook_idxs
@@ -153,7 +154,8 @@ def train_phase2(
             writer.add_scalar("phase2/loss", loss.item(), glb_iter)
             glb_iter += 1
 
-        if ep % 4 == 0:
+        if ep+1 % 100 == 0:
+            print("Saving phase2 model @ Epoch", ep)
             torch.save(fmri_encoder.state_dict(), f'{model_dir}/fmri-encoder-epoch-{ep}.pth')
 
 
