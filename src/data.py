@@ -66,7 +66,7 @@ class GODDataset(Dataset):
         fmri = self.fmri_data_all[idx]
         if self.image_transforms:
             image = self.image_transforms(image)
-        return image, fmri
+        return image, fmri.astype(np.float32)
 
 
 class GODLoader():
