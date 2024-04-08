@@ -120,6 +120,7 @@ def train_phase1(
 
 def train_phase2(
         train_loader,
+        validation_loader,
         epochs,
         fmri_encoder: FMRIEncoder,
         trained_vq_vae: VqVaeAbc,
@@ -154,7 +155,17 @@ def train_phase2(
             writer.add_scalar("phase2/loss", loss.item(), glb_iter)
             glb_iter += 1
 
-        if ep+1 % 100 == 0:
+        for images, fmris in validation_loader:
+            fmri_feats = fmri_encoder(fmris)
+            fmri_tokens, fmri_codebook_idxs, __, __ = trained_vq_vae.quantize(fmri_feats)
+            img_tokens, img_codebook_idxs = trained_vq_vae.encode(images)
+            val_loss = lossVQ_MSE(
+                fmri_feats, fmri_codebook_idxs, img_tokens.detach(), img_codebook_idxs
+            )
+            writer.add_scalar("phase2/val_loss", val_loss.item(), glb_iter)
+            break  # only one batch in val loader
+
+        if (ep+1) % 30 == 0:
             print("Saving phase2 model @ Epoch", ep)
             torch.save(fmri_encoder.state_dict(), f'{model_dir}/fmri-encoder-epoch-{ep}.pth')
 
