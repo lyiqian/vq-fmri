@@ -163,6 +163,13 @@ def train_phase2(
                 fmri_feats, fmri_codebook_idxs, img_tokens.detach(), img_codebook_idxs
             )
             writer.add_scalar("phase2/val_loss", val_loss.item(), glb_iter)
+
+            mismatches = (  # taken from lossVQ_MSE
+                torch.ne(fmri_codebook_idxs, img_codebook_idxs).float()
+                    .view([fmri_feats.shape[0], *fmri_feats.shape[2:]])
+            )
+            mismatch_rate = mismatches.mean()
+            writer.add_scalar("phase2/val_mismatch_rate", mismatch_rate.item(), glb_iter)
             break  # only one batch in val loader
 
         if (ep+1) % 30 == 0:
