@@ -644,10 +644,11 @@ class MLP(nn.Module):
         self.out_width = out_width  # assuming squares
         self.out_dims = VqVae.CODEBOOK_DIM * self.out_width**2
 
-        self.fc1 = nn.Linear(self.in_dims, self.out_dims)
+        self.fc1 = nn.Linear(self.in_dims, self.in_dims//2)
         self.relu1 = nn.ReLU()
-        self.fc2 = nn.Linear(self.out_dims, self.out_dims)
+        self.fc2 = nn.Linear(self.in_dims//2, self.in_dims//2)
         self.relu2 = nn.ReLU()
+        self.fc3 = nn.Linear(self.in_dims//2, self.out_dims)
 
     def forward(self, x):
         x = x.view(-1, self.in_dims)
@@ -655,6 +656,7 @@ class MLP(nn.Module):
         x = self.relu1(x)
         x = self.fc2(x)
         x = self.relu2(x)
+        x = self.fc3(x)
         return x.view(-1, VqVae.CODEBOOK_DIM, self.out_width, self.out_width)
 
 
