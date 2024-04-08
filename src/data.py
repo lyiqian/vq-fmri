@@ -74,7 +74,7 @@ class GODLoader():
         image_transforms = transforms.Compose([
             transforms.Resize((64, 64)),      # Resize the image to 64x64 pixels
             transforms.ToTensor(),              # Convert the image to a PyTorch tensor
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),  # Normalize with ImageNet stats
+            # transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),  # Normalize with ImageNet stats
         ])
         self.batch_size = batch_size
         self.train_loader = DataLoader(GODDataset(data_dir=data_dir, image_transforms=image_transforms, split='training'), batch_size=self.batch_size, shuffle=True)
