@@ -27,6 +27,7 @@ class GODDataset(Dataset):
         self.img_ids = pd.read_csv(df_path, header=None)
 
         subject_files = [p for p in data_dir.glob("*.h5")]
+        subject_files = [p for p in data_dir.glob("Subject1.h5")]
         fmri_data_stack = []
         image_id_stack = []
         for sf in subject_files:
