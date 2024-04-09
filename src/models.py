@@ -646,9 +646,9 @@ class MLP(nn.Module):
 
         self.fc1 = nn.Linear(self.in_dims, self.in_dims//2)
         self.relu1 = nn.ReLU()
-        self.fc2 = nn.Linear(self.in_dims//2, self.in_dims//2)
+        self.fc2 = nn.Linear(self.in_dims//2, self.in_dims//10)
         self.relu2 = nn.ReLU()
-        self.fc3 = nn.Linear(self.in_dims//2, self.out_dims)
+        self.fc3 = nn.Linear(self.in_dims//10, self.out_dims)
 
     def forward(self, x):
         x = x.view(-1, self.in_dims)
