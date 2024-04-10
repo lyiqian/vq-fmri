@@ -114,12 +114,6 @@ The selected paper proposed an fMRI-to-image model named VQ-fMRI, which was base
 
 The proposed VQ-fMRI model first needs a trained VQ-VAE including its codebook, independent of fMRI data. Then, an fMRI encoder is guided by the codebook to learn to encode fMRI recordings to the discrete prototype vectors. After a series of learned de-noising and content completion processes for the encoded fMRI, it is decoded by the VQ-VAE decoder to reconstruct the image shown to the fMRI subject. Therefore, the reconstructed image uses information from both visual stimulus (fMRI) and past experience (codebook), which is one of the motivations of the paper.
 
-TO REMOVE
-
-\begin{center}
-\textbf{\texttt{http://icml.cc/}}
-\end{center}
-
 
 \subsection{Paper Contributions}
 As stated by the authors and observed by us, the main contributions of the paper are:
@@ -130,82 +124,60 @@ As stated by the authors and observed by us, the main contributions of the paper
 \item Better results comparing to previous methods.
 \end{itemize}
 
-TO REMOVE
 
-\textbf{Anonymous Submission:} ICML uses double-blind review: no identifying
-author information may appear on the title page or in the paper
-itself. \cref{author info} gives further details.
+\section{Reproduction Attempt}
+
+We planned to reproduce the main reconstruction results including their evaluation. There were four components that needed implementation and training:
+\begin{itemize}
+\item Phase I: VQ-VAE
+\item Phase II: fMRI encoder
+\item Phase III: denoiser and inpainter
+\item Phase IV: super-resolution model
+\end{itemize} 
+
+After implementation with PyTorch, we first trained VQ-VAE on ImageNet as all remaining components are dependent on it. The fMRI encoder was then trained using the quantizer of VQ-VAE and the GOD dataset \citep{horikawa2016}, which contains fMRI recordings from five subjects and corresponding images. The denoiser, inpainter, and super-res model were trained last. Lab desktops and own laptops were the main computation resources we leveraged in this project.
+
+\subsection{Our Results}
+
+\begin{figure}[t]
+\begin{center}
+\centerline{\includegraphics[width=\columnwidth]{decoded-imgs}}
+\caption{Our reproduction results. First, second and third row shows the stimulus, the VQ-VAE decoded and the VQ-fMRI decoded images, respectively. Images were selected randomly.}
+\label{decoded-imgs}
+\end{center}
+\vskip -0.2in
+\end{figure}
+
+\begin{figure}[!t]
+\begin{center}
+\centerline{\includegraphics[width=\columnwidth]{orig-figure}}
+\caption{Results from original paper, Fig 5 \citep{chenRethinkingVisualReconstruction2023}. First column shows the stimulus images, and last column shows their VQ-fMRI decoded images.}
+\label{orig-figure}
+\end{center}
+\vskip -0.2in
+\end{figure}
+
+
+\textbf{Qualitative results. TODO}
+As shown in \cref{decoded-imgs}, ...
+Comparing the last row of \cref{decoded-imgs} to the last column of original results in \cref{orig-figure}, they clearly had better color restoration and the outlines seemed smoother with more details.
+
+
+As a side note, our trained VQ-VAE did not produce as good results (\cref{decoded-imgs}, 2nd row) as in \cite{oordNeuralDiscreteRepresentation2018}.
+
+
+\textbf{Quantitative results. TODO} \cref{metric-table} shows the comparison of evaluation metrics between the original results and our reproduction. ...
 
 \medskip
 
-Those who use \textbf{\LaTeX} should avoid including Type-3 fonts.
-Those using \texttt{latex} and \texttt{dvips} may need the following
-two commands:
+Other than above evaluation results, we could confirm that shape info were learned before color and texture info over the course of training, as claimed in the paper.
 
-{\footnotesize
-\begin{verbatim}
-dvips -Ppdf -tletter -G0 -o paper.ps paper.dvi
-ps2pdf paper.ps
-\end{verbatim}}
-It is a zero following the ``-G'', which tells dvips to use
-the config.pdf file. Newer \TeX\ distributions don't always need this
-option.
-
-\textbf{Graphics files} should be a reasonable size, and included from
-an appropriate format. Use vector formats (.eps/.pdf) for plots,
-lossless bitmap formats (.png) for raster graphics with sharp lines, and
-jpeg for photo-like images.
-
-The style file uses the \texttt{hyperref} package to make clickable
-links in documents. If this causes problems for you, add
-\texttt{nohyperref} as one of the options to the \texttt{icml2024}
-usepackage statement.
-
-
-\subsection{TBD}
-
-The final versions of papers accepted for publication should follow the
-same format and naming convention as initial submissions, except that
-author information (names and affiliations) should be given. See
-\cref{final author} for formatting instructions.
-
-The footnote, ``Preliminary work. Under review by the International
-Conference on Machine Learning (ICML). Do not distribute.'' must be
-modified to ``\textit{Proceedings of the
-$\mathit{41}^{st}$ International Conference on Machine Learning},
-Vienna, Austria, PMLR 235, 2024.
-Copyright 2024 by the author(s).''
-
-For those using the \textbf{\LaTeX} style file, this change (and others) is
-handled automatically by simply changing
-$\mathtt{\backslash usepackage\{icml2024\}}$ to
-$$\mathtt{\backslash usepackage[accepted]\{icml2024\}}$$
-Authors using \textbf{Word} must edit the
-footnote on the first page of the document themselves.
-
-Camera-ready copies should have the title of the paper as running head
-on each page except the first one. The running title consists of a
-single line centered above a horizontal rule which is $1$~point thick.
-The running head should be centered, bold and in $9$~point type. The
-rule should be $10$~points above the main text. For those using the
-\textbf{\LaTeX} style file, the original title is automatically set as running
-head using the \texttt{fancyhdr} package which is included in the ICML
-2024 style file package. In case that the original title exceeds the
-size restrictions, a shorter form can be supplied by using
-
-\verb|\icmltitlerunning{...}|
-
-just before $\mathtt{\backslash begin\{document\}}$.
-Authors using \textbf{Word} must edit the header of the document themselves.
-
-\section{Reproduction Attempt TODO}
-
-All submissions must follow the specified format.
-
-\subsection{Potential Issues TODO}
+\subsection{Possible Reasons for Discrepancies TODO}
+although reasonable amount of details are provided in the paper ....
 
 
 
+TO REMOVE
 
 The text of the paper should be formatted in two columns, with an
 overall width of 6.75~inches, height of 9.0~inches, and 0.25~inches
@@ -219,58 +191,11 @@ The paper body should be set in 10~point type with a vertical spacing
 of 11~points. Please use Times typeface throughout the text.
 
 
-\subsubsection{Paragraphs and Footnotes}
-
-Within each section or subsection, you should further partition the
-paper into paragraphs. Do not indent the first line of a given
-paragraph, but insert a blank line between succeeding ones.
-
-You can use footnotes\footnote{Footnotes
-should be complete sentences.} to provide readers with additional
-information about a topic without interrupting the flow of the paper.
-Indicate footnotes with a number in the text where the point is most
-relevant. Place the footnote in 9~point type at the bottom of the
-column in which it appears. Precede the first footnote in a column
-with a horizontal rule of 0.8~inches.\footnote{Multiple footnotes can
-appear in each column, in the same order as they appear in the text,
-but spread them across columns and pages if possible.}
-
-\begin{figure}[ht]
-\vskip 0.2in
-\begin{center}
-%\centerline{\includegraphics[width=\columnwidth]{icml_numpapers}}
-\caption{Historical locations and number of accepted papers for International
-Machine Learning Conferences (ICML 1993 -- ICML 2008) and International
-Workshops on Machine Learning (ML 1988 -- ML 1992). At the time this figure was
-produced, the number of accepted papers for ICML 2008 was unknown and instead
-estimated.}
-\label{icml-historical}
-\end{center}
-\vskip -0.2in
-\end{figure}
-
-\subsection{Figures}
-
-You may want to include figures in the paper to illustrate
-your approach and results. Such artwork should be centered,
-legible, and separated from the text. Lines should be dark and at
-least 0.5~points thick for purposes of reproduction, and text should
-not appear on a gray background.
-
-Label all distinct components of each figure. If the figure takes the
-form of a graph, then give a name for each axis and include a legend
-that briefly describes each curve. Do not include a title inside the
-figure; instead, the caption should serve this function.
-
-Number figures sequentially, placing the figure number and caption
-\emph{after} the graphics, with at least 0.1~inches of space before
-the caption and 0.1~inches after it, as in
-\cref{icml-historical}. The figure caption should be set in
-9~point type and centered unless it runs two or more lines, in which
-case it should be flush left. You may float figures to the top or
-bottom of a column, and you may set wide figures across both columns
-(use the environment \texttt{figure*} in \LaTeX). Always place
-two-column figures at the top or bottom of the page.
+%\subsection{Figures}
+%You may float figures to the top or
+%bottom of a column, and you may set wide figures across both columns
+%(use the environment \texttt{figure*} in \LaTeX). Always place
+%two-column figures at the top or bottom of the page.
 
 \subsection{Tables}
 
@@ -286,25 +211,19 @@ should be flush left.
 % above and below tabular lines.
 
 \begin{table}[t]
-\caption{Classification accuracies for naive Bayes and flexible
-Bayes on various data sets.}
-\label{sample-table}
+\caption{Comparison of quantitative evaluation metrics.}
+\label{metric-table}
 \vskip 0.15in
 \begin{center}
 \begin{small}
 \begin{sc}
-\begin{tabular}{lcccr}
+\begin{tabular}{lrrc}
 \toprule
-Data set & Naive & Flexible & Better? \\
+Metric & Original & Ours & Reproduced? \\
 \midrule
-Breast    & 95.9$\pm$ 0.2& 96.7$\pm$ 0.2& $\surd$ \\
-Cleveland & 83.3$\pm$ 0.6& 80.0$\pm$ 0.6& $\times$\\
-Glass2    & 61.9$\pm$ 1.4& 83.8$\pm$ 0.7& $\surd$ \\
-Credit    & 74.8$\pm$ 0.5& 78.3$\pm$ 0.6&         \\
-Horse     & 73.3$\pm$ 0.9& 69.7$\pm$ 1.0& $\times$\\
-Meta      & 67.1$\pm$ 0.6& 76.5$\pm$ 0.5& $\surd$ \\
-Pima      & 75.1$\pm$ 0.6& 73.9$\pm$ 0.5&         \\
-Vehicle   & 44.9$\pm$ 0.6& 61.5$\pm$ 0.4& $\surd$ \\
+SSIM    & 0.492 & TODO & $\times$ \\
+PSNR    & 13.4 &  TODO & $\times$ \\
+PCC     & 0.551 & TODO & $\times$ \\
 \bottomrule
 \end{tabular}
 \end{sc}
@@ -325,7 +244,7 @@ We believed the workload split between two of us was even. Before project propos
 
 The proposal document was mostly written by Bahman; this report was mainly prepared by Yiqian. Bahman recorded the presentation video.
 
-In terms of implementation, we tried to followed the planned work split in the proposal. Bahman coded for vector quantizer of VQ-VAE, and UNet, which was used in multiple components of the final model, including the inpainter, denoiser, and super-res model. Bahman also wrote some data loaders and training code. Yiqian designed the high-level structure and the interfaces. Yiqian also coded up the image encoder \& decoder of VQ-VAE, fMRI encoder, and some training parts. Occasionally, we corrected each other's code.
+In terms of implementation, we tried to followed the planned work split in the proposal. Bahman coded for vector quantizer of VQ-VAE, and UNet, which was used in multiple components of the final model, including the inpainter, denoiser, and super-res model. Bahman also wrote some data loaders and training code. Yiqian designed the high-level structure and the interfaces. Yiqian also coded up the image encoder \& decoder of VQ-VAE, fMRI encoder, some training, and evaluation. Occasionally, we corrected each other's code.
 
 During model training, Yiqian was responsible for VQ-VAE (Phase I) and fMRI encoder (Phase II), whereas Bahman took over denoiser \& inpainter (Phase III) and super-res model (Phase IV).
 
@@ -348,40 +267,15 @@ when writing their review.
 the paper submitted for blind review.
 
 If a paper is accepted, the final camera-ready version can (and
-probably should) include acknowledgements. In this case, please
-place such acknowledgements in an unnumbered section at the
-end of the paper. Typically, this will include thanks to reviewers
-who gave useful comments, to colleagues who contributed to the ideas,
-and to funding agencies and corporate sponsors that provided financial
-support.
+probably should) include acknowledgements.
 
 
 % In the unusual situation where you want a paper to appear in the
 % references without citing it in the main text, use \nocite
-\nocite{langley00}
+%\nocite{langley00}
 
 \bibliography{report}
 \bibliographystyle{icml2024}
-
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% APPENDIX
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\newpage
-\appendix
-\onecolumn
-\section{You \emph{can} have an appendix here.}
-
-You can have as much text here as you want. The main body must be at most $8$ pages long.
-For the final version, one more page can be added.
-If you want, you can use an appendix like this one.  
-
-The $\mathtt{\backslash onecolumn}$ command above can be kept in place if you prefer a one-column appendix, or can be removed if you prefer a two-column appendix.  Apart from this possible change, the style (font size, spacing, margins, page numbering, etc.) should be kept the same as the main body.
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
 
 \end{document}
 
