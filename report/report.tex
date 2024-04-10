@@ -158,7 +158,9 @@ After implementing with PyTorch, we first trained a VQ-VAE on ImageNet as all re
 \end{figure}
 
 
-\textbf{Qualitative results. TODO}
+\textbf{Qualitative results.}
+\todo
+
 As shown in \cref{decoded-imgs}, ...
 Comparing the last row of \cref{decoded-imgs} to the last column of original results in \cref{orig-figure}, they clearly had better color restoration and the outlines seemed smoother with more details.
 
@@ -166,51 +168,17 @@ Comparing the last row of \cref{decoded-imgs} to the last column of original res
 As a side note, our trained VQ-VAE did not produce as good results (\cref{decoded-imgs}, 2nd row) as in \cite{oordNeuralDiscreteRepresentation2018}.
 
 
-\textbf{Quantitative results. TODO} \cref{metric-table} shows the comparison of evaluation metrics between the original results and our reproduction. ...
+\textbf{Quantitative results.}
+\todo 
+
+\cref{metric-table} shows the comparison of evaluation metrics between the original results and our reproduction. ...
 
 \medskip
 
 Other than above evaluation results, we could confirm that shape info were learned before color and texture info over the course of training, as claimed in the paper.
 
-\subsection{Possible Reasons for Discrepancies TODO}
-although reasonable amount of details are provided in the paper ....
 
-
-
-TO REMOVE
-
-The text of the paper should be formatted in two columns, with an
-overall width of 6.75~inches, height of 9.0~inches, and 0.25~inches
-between the columns. The left margin should be 0.75~inches and the top
-margin 1.0~inch (2.54~cm). The right and bottom margins will depend on
-whether you print on US letter or A4 paper, but all final versions
-must be produced for US letter size.
-Do not write anything on the margins.
-
-The paper body should be set in 10~point type with a vertical spacing
-of 11~points. Please use Times typeface throughout the text.
-
-
-%\subsection{Figures}
-%You may float figures to the top or
-%bottom of a column, and you may set wide figures across both columns
-%(use the environment \texttt{figure*} in \LaTeX). Always place
-%two-column figures at the top or bottom of the page.
-
-\subsection{Tables}
-
-You may also want to include tables that summarize material. Like
-figures, these should be centered, legible, and numbered consecutively.
-However, place the title \emph{above} the table with at least
-0.1~inches of space before the title and the same after it, as in
-\cref{sample-table}. The table title should be set in 9~point
-type and centered unless it runs two or more lines, in which case it
-should be flush left.
-
-% Note use of \abovespace and \belowspace to get reasonable spacing
-% above and below tabular lines.
-
-\begin{table}[t]
+\begin{table}[b]
 \caption{Comparison of quantitative evaluation metrics.}
 \label{metric-table}
 \vskip 0.15in
@@ -232,11 +200,21 @@ PCC     & 0.551 & TODO & $\times$ \\
 \vskip -0.1in
 \end{table}
 
-Tables contain textual material, whereas figures contain graphical material.
-Specify the contents of each row and column in the table's topmost
-row. Again, you may float tables to a column's top or bottom, and set
-wide tables across both columns. Place two-column tables at the
-top or bottom of the page.
+\subsection{Possible Reasons for Discrepancies}
+Although a good amount of details are provided in the paper, some critical information is not documented. The GOD fMRI dataset \cite{horikawa2016} has different formats of data, including raw fMRI recordings and pre-processed data. It was unclear which set of data the authors used to train the fMRI encoder. Another issue with the fMRI dataset was the inconsistency among subjects. There were five subjects but their data dimensions differed. We decided to use only one subject for our experiments.
+
+As a result, our trained fMRI encoder did not seem able to reach a reasonable performance level. Yet, the performance of the fMRI encoder was also not detailed in the original paper. The image encoder and decoder of VQ-VAE, as noted previously, did not yield ideal results, either. As these two models are the upstream components in the VQ-fMRI framework, their underperformance, we believed, contributed to the discrepancies the most.
+
+Another detail missed in the paper is regarding one of the evaluation metrics, structural similarity index (SSIM). Unlike other pixel-level metrics, SSIM attempts to include neighbor info to evaluate the image reconstruction. The authors evaluated the models with SSIM, but did not mention the neighbor size of the metric. We decided to use a simple 3x3 neighbor.
+
+
+%\subsection{Figures}
+%You may float figures to the top or
+%bottom of a column, and you may set wide figures across both columns
+%(use the environment \texttt{figure*} in \LaTeX). Always place
+%two-column figures at the top or bottom of the page.
+
+
 
 
 \section{Contribution of Team Members}
@@ -249,25 +227,22 @@ In terms of implementation, we tried to followed the planned work split in the p
 During model training, Yiqian was responsible for VQ-VAE (Phase I) and fMRI encoder (Phase II), whereas Bahman took over denoiser \& inpainter (Phase III) and super-res model (Phase IV).
 
 
-\section*{Software and Data TODO}
+\section*{Code and Data}
 
-If a paper is accepted, we strongly encourage the publication of software and data with the
-camera-ready version of the paper whenever appropriate. This can be
-done by including a URL in the camera-ready copy. However, \textbf{do not}
-include URLs that reveal your institution or identity in your
-submission for review. Instead, provide an anonymous URL or upload
-the material as ``Supplementary Material'' into the OpenReview reviewing
-system. Note that reviewers are not required to look at this material
-when writing their review.
+\todo
+
+Code is available at ...
+
+Data used in the reproducibility challenge is ImageNet, and GOD dataset \cite{horikawa2016}.
 
 % Acknowledgements should only appear in the accepted version.
-\section*{Acknowledgements}
-
-\textbf{Do not} include acknowledgements in the initial version of
-the paper submitted for blind review.
-
-If a paper is accepted, the final camera-ready version can (and
-probably should) include acknowledgements.
+%\section*{Acknowledgements}
+%
+%\textbf{Do not} include acknowledgements in the initial version of
+%the paper submitted for blind review.
+%
+%If a paper is accepted, the final camera-ready version can (and
+%probably should) include acknowledgements.
 
 
 % In the unusual situation where you want a paper to appear in the
