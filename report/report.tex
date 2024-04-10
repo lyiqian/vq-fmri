@@ -103,18 +103,19 @@
 %\printAffiliationsAndNotice{}  % leave blank if no need to mention equal contribution
 \printAffiliationsAndNotice{\icmlEqualContribution} % otherwise use the standard text.
 
-%\begin{abstract}
-%This document provides a basic paper template and submission guidelines.
-%Abstracts must be a single paragraph, ideally between 4--6 sentences long.
-%Gross violations will trigger corrections at the camera-ready phase.
-%\end{abstract}
+\begin{abstract}
+This report is for the course project of EECS6322 Winter 2024. An fMRI-to-image model, VQ-fMRI \cite{chenRethinkingVisualReconstruction2023} was selected for this reproducibility challenge. We were unable to fully reproduce the original results but possible reasons are discussed in the report.
+\end{abstract}
 
-\section{Paper Summary TODO}
+\section{Paper Summary}
 \label{submission}
 
-Submission to ICML 2024 will be entirely electronic, via a web site
-(not email). Information about the submission process and \LaTeX\ templates
-are available on the conference web site at:
+The selected paper proposed an fMRI-to-image model named VQ-fMRI, which was based on VQ-VAE \cite{oordNeuralDiscreteRepresentation2018}. Vector quantization VAE is a derivation of regular VAE by replacing the continuous latent space with a discrete one. This discrete latent space was represented by a codebook containing a limited number of prototype vectors. An encoded image now consists of these prototype vectors at a lower spatial resolution.
+
+The proposed VQ-fMRI model first needs a trained VQ-VAE including its codebook, independent of fMRI data. Then, an fMRI encoder is guided by the codebook to learn to encode fMRI recordings to the discrete prototype vectors. After a series of learned de-noising and content completion processes for the encoded fMRI, it is decoded by the VQ-VAE decoder to reconstruct the image shown to the fMRI subject. Therefore, the reconstructed image uses information from both visual stimulus (fMRI) and past experience (codebook), which is one of the motivations of the paper.
+
+TO REMOVE
+
 \begin{center}
 \textbf{\texttt{http://icml.cc/}}
 \end{center}
@@ -124,23 +125,9 @@ camera-ready copies. Here is a brief summary:
 \begin{itemize}
 \item Submissions must be in PDF\@. 
 \item \textbf{New to this year}: If your paper has appendices, submit the appendix together with the main body and the references \textbf{as a single file}. Reviewers will not look for appendices as a separate PDF file. So if you submit such an extra file, reviewers will very likely miss it.
-\item Page limit: The main body of the paper has to be fitted to 8 pages, excluding references and appendices; the space for the latter two is not limited. For the final version of the paper, authors can add one extra page to the main body.
-\item \textbf{Do not include author information or acknowledgements} in your
-    initial submission.
-\item Your paper should be in \textbf{10 point Times font}.
-\item Make sure your PDF file only uses Type-1 fonts.
-\item Place figure captions \emph{under} the figure (and omit titles from inside
-    the graphic file itself). Place table captions \emph{over} the table.
-\item References must include page numbers whenever possible and be as complete
-    as possible. Place multiple citations in chronological order.
-\item Do not alter the style template; in particular, do not compress the paper
-    format by reducing the vertical spaces.
-\item Keep your abstract brief and self-contained, one paragraph and roughly
-    4--6 sentences. Gross violations will require correction at the
-    camera-ready phase. The title should have content words capitalized.
 \end{itemize}
 
-\subsection{Contribution TODO}
+\subsection{Paper Contributions TODO}
 
 \textbf{Paper Deadline:} The deadline for paper submission that is
 advertised on the conference website is strict. If your full,
