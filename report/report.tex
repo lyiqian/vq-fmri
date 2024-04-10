@@ -320,7 +320,15 @@ wide tables across both columns. Place two-column tables at the
 top or bottom of the page.
 
 
-\section{Contribution of Team Members TODO}
+\section{Contribution of Team Members}
+We believed the workload split between two of us was even. Before project proposal, we independently looked for appropriate papers, and each short-listed about 3 of them. We agreed on this VQ-fMRI paper that interested both of us.
+
+The proposal document was mostly written by Bahman; this report was mainly prepared by Yiqian. Bahman recorded the presentation video.
+
+In terms of implementation, we tried to followed the planned work split in the proposal. Bahman coded for vector quantizer of VQ-VAE, and UNet, which was used in multiple components of the final model, including the inpainter, denoiser, and super-res model. Bahman also wrote some data loaders and training code. Yiqian designed the high-level structure and the interfaces. Yiqian also coded up the image encoder \& decoder of VQ-VAE, fMRI encoder, and some training parts. Occasionally, we corrected each other's code.
+
+During model training, Yiqian was responsible for VQ-VAE (Phase I) and fMRI encoder (Phase II), whereas Bahman took over denoiser \& inpainter (Phase III) and super-res model (Phase IV).
+
 
 \section*{Software and Data TODO}
 
