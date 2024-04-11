@@ -1,7 +1,7 @@
 import abc
 import itertools
 
-from data import FMRI, Image, ImageDataset
+from data import FMRI, ImNetImage, ImageDataset
 
 # torch imports
 import torch
@@ -48,7 +48,7 @@ class UNetAbc(abc.ABC):  # Bahman
         pass
 
 
-class FMRIEncoderAbc(abc.ABC):  # Eason
+class FMRIEncoderAbc(abc.ABC):  # TODO TBD
     @abc.abstractmethod
     def encode(self, fmri: FMRI) -> SpatialFeats:
         pass
@@ -56,13 +56,13 @@ class FMRIEncoderAbc(abc.ABC):  # Eason
 
 class ImageEncoderAbc(abc.ABC):  # Eason
     @abc.abstractmethod
-    def encode(self, img: Image) -> SpatialFeats:
+    def encode(self, img: ImNetImage) -> SpatialFeats:
         pass
 
 
 class ImageDecoderAbc(abc.ABC):  # Eason
     @abc.abstractmethod
-    def decode(self, spatial_tokens: SpatialTokens) -> Image:
+    def decode(self, spatial_tokens: SpatialTokens) -> ImNetImage:
         pass
 
 
@@ -85,11 +85,11 @@ class VqVaeAbc(abc.ABC):  # Eason
         pass
 
     @abc.abstractmethod
-    def encode(self, img: Image) -> SpatialTokens:
+    def encode(self, img: ImNetImage) -> SpatialTokens:
         pass
 
     @abc.abstractmethod
-    def decode(self, spatial_tokens: SpatialTokens) -> Image:
+    def decode(self, spatial_tokens: SpatialTokens) -> ImNetImage:
         pass
 
     @abc.abstractmethod
@@ -142,7 +142,7 @@ class SuperResolutionAbc(abc.ABC):  # Bahman
 
 class UNetConvBlock(nn.Module):
     def __init__(
-        self, in_channels, out_channels, kernel_size=4, stride=2, padding=1
+        self, in_channels, out_channels, kernel_size=4, stride=1, padding=1
     ) -> None:
         super().__init__()
         self.conv_layer_1 = nn.Conv2d(
@@ -172,19 +172,22 @@ class UNetEnc(nn.Module):
         # a different formula. Change this if the results were not good!
         # ENCODER PART:
         # uncb_d: UNet Conv Block Down sampling
+
+        # TODO: I set the kernel size of bottleneck to 3, because kernelsize 4 just messes up 
+        # layer dimensionalities!
         self.uncb_d_1 = UNetConvBlock(
             in_channels=in_channels,
             out_channels=in_channels * 2,
-            kernel_size=4,
-            stride=2,
+            kernel_size=3,
+            stride=1,
             padding=1,
         )
         self.down_sampling_1 = nn.MaxPool2d(2, 2)
         self.uncb_d_2 = UNetConvBlock(
             in_channels=in_channels * 2,
             out_channels=in_channels * 4,
-            kernel_size=4,
-            stride=2,
+            kernel_size=3,
+            stride=1,
             padding=1,
         )
         self.down_sampling_2 = nn.MaxPool2d(2, 2)
@@ -202,24 +205,17 @@ class UNetDec(nn.Module):
     def __init__(self, in_channels=8, out_channels=8) -> None:
         super().__init__()
         # DECODER PART:
-        self.uncb_u_1 = UNetConvBlock(
-            in_channels=in_channels * 8,
-            out_channels=in_channels * 4,
-            kernel_size=4,
-            stride=2,
-            padding=1,
-        )
         self.up_sampling_1 = nn.ConvTranspose2d(
             in_channels=in_channels * 8,
             out_channels=in_channels * 4,
             kernel_size=2,
-            stride=2,
+            stride=2
         )
-        self.uncb_u_2 = UNetConvBlock(
-            in_channels=in_channels * 4,
-            out_channels=in_channels * 2,
-            kernel_size=4,
-            stride=2,
+        self.uncb_u_1 = UNetConvBlock(
+            in_channels=in_channels * 8,
+            out_channels=in_channels * 4,
+            kernel_size=3,
+            stride=1,
             padding=1,
         )
         self.up_sampling_2 = nn.ConvTranspose2d(
@@ -228,16 +224,23 @@ class UNetDec(nn.Module):
             kernel_size=2,
             stride=2,
         )
+        self.uncb_u_2 = UNetConvBlock(
+            in_channels=in_channels * 4,
+            out_channels=in_channels * 2,
+            kernel_size=3,
+            stride=1,
+            padding=1,
+        )
 
-        def forward(self, x, resids):
-            uncb_d_1, uncb_d_2 = resids
-            uncb_u_1 = self.uncb_u_1(x)
-            uncb_u_1 = torch.cat(uncb_u_1, uncb_d_2)
-            up_sampling_1 = self.up_sampling_1(uncb_u_1)
-            uncb_u_2 = self.uncb_u_2(up_sampling_1)
-            uncb_u_2 = torch.cat(uncb_u_2, uncb_d_1)
-            up_sampling_2 = self.up_sampling_2(uncb_u_2)
-            return up_sampling_2
+    def forward(self, x, resids):
+        uncb_d_1, uncb_d_2 = resids
+        up_sampling_1 = self.up_sampling_1(x)
+        up_sampling_1 = torch.cat([up_sampling_1, uncb_d_2], dim=1)
+        uncb_u_1 = self.uncb_u_1(up_sampling_1)
+        up_sampling_2 = self.up_sampling_2(uncb_u_1)
+        up_sampling_2 = torch.cat([up_sampling_2, uncb_d_1], dim=1)
+        uncb_u_2 = self.uncb_u_2(up_sampling_2)
+        return uncb_u_2
 
 
 class UNetDec2X(nn.Module):
@@ -249,24 +252,17 @@ class UNetDec2X(nn.Module):
 
     def __init__(self, in_channels=8, out_channels=8) -> None:
         super().__init__()
-        self.uncb_u_1 = UNetConvBlock(
-            in_channels=in_channels * 8,
-            out_channels=in_channels * 4,
-            kernel_size=4,
-            stride=2,
-            padding=1,
-        )
         self.up_sampling_1 = nn.ConvTranspose2d(
             in_channels=in_channels * 8,
             out_channels=in_channels * 4,
             kernel_size=2,
             stride=2,
         )
-        self.uncb_u_2 = UNetConvBlock(
-            in_channels=in_channels * 4,
-            out_channels=in_channels * 2,
-            kernel_size=4,
-            stride=2,
+        self.uncb_u_1 = UNetConvBlock(
+            in_channels=in_channels * 8,
+            out_channels=in_channels * 4,
+            kernel_size=3,
+            stride=1,
             padding=1,
         )
         self.up_sampling_2 = nn.ConvTranspose2d(
@@ -275,33 +271,40 @@ class UNetDec2X(nn.Module):
             kernel_size=2,
             stride=2,
         )
-        self.uncb_u_3 = UNetConvBlock(
-            in_channels=in_channels * 2,
-            out_channels=in_channels,
-            kernel_size=4,
-            stride=2,
+        self.uncb_u_2 = UNetConvBlock(
+            in_channels=in_channels * 4,
+            out_channels=in_channels * 2,
+            kernel_size=3,
+            stride=1,
             padding=1,
         )
         self.up_sampling_3 = nn.ConvTranspose2d(
-            in_channels=in_channels * 1,
-            out_channels=in_channels,
+            in_channels=in_channels * 2,
+            out_channels=in_channels * 2,
             kernel_size=2,
             stride=2,
         )
+        self.uncb_u_3 = UNetConvBlock(
+            in_channels=in_channels * 2,
+            out_channels=in_channels * 2,
+            kernel_size=3,
+            stride=1,
+            padding=1,
+        )
 
-        def forward(self, x, resids):
-            uncb_d_1, uncb_d_2 = resids
-            uncb_u_1 = self.uncb_u_1(x)
-            uncb_u_1 = torch.cat(uncb_u_1, uncb_d_2)
-            up_sampling_1 = self.up_sampling_1(uncb_u_1)
-            uncb_u_2 = self.uncb_u_2(up_sampling_1)
-            uncb_u_2 = torch.cat(uncb_u_2, uncb_d_1)
-            up_sampling_2 = self.up_sampling_2(uncb_u_2)
-            # X2 part:
-            uncb_u_3 = self.uncb_u_3(up_sampling_2)
-            uncb_u_3 = torch.cat(uncb_u_3, uncb_d_1)
-            up_sampling_3 = self.up_sampling_3(uncb_u_3)
-            return up_sampling_3
+
+    def forward(self, x, resids):
+        uncb_d_1, uncb_d_2 = resids
+        up_sampling_1 = self.up_sampling_1(x)
+        up_sampling_1 = torch.cat([up_sampling_1, uncb_d_2], dim=1)
+        uncb_u_1 = self.uncb_u_1(up_sampling_1)
+        up_sampling_2 = self.up_sampling_2(uncb_u_1)
+        up_sampling_2 = torch.cat([up_sampling_2, uncb_d_1], dim=1)
+        uncb_u_2 = self.uncb_u_2(up_sampling_2)
+        # X2 part:
+        up_sampling_3 = self.up_sampling_3(uncb_u_2)
+        uncb_u_3 = self.uncb_u_3(up_sampling_3)
+        return uncb_u_3
 
 
 class UNet(nn.Module, UNetAbc):  # Bahman
@@ -310,11 +313,13 @@ class UNet(nn.Module, UNetAbc):  # Bahman
         super().__init__()
         self.enc = UNetEnc(in_channels=in_channels, out_channels=out_channels)
         # BOTTLENECK
+        # TODO: I set the kernel size of bottleneck to 3, because kernelsize 4 just messes up 
+        # layer dimensionalities!
         self.bottleneck = UNetConvBlock(
             in_channels=in_channels * 4,
             out_channels=in_channels * 8,
-            kernel_size=4,
-            stride=2,
+            kernel_size=3,
+            stride=1,
             padding=1,
         )
         self.dec = UNetDec(in_channels=in_channels, out_channels=out_channels)
@@ -325,9 +330,9 @@ class UNet(nn.Module, UNetAbc):  # Bahman
     def forward(self, x):
         # TODO: I'm also not sure if people still use sigmoid as the last activation function for
         # UNets.
-        down_samped, uncb_d_1, uncb_d_2 = self.enc(x)
+        down_samped, [uncb_d_1, uncb_d_2] = self.enc(x)
         bottleneck = self.bottleneck(down_samped)
-        up_samped = self.dec(bottleneck, uncb_d_1, uncb_d_2)
+        up_samped = self.dec(bottleneck, [uncb_d_1, uncb_d_2])
         unary_conv = torch.sigmoid(self.unary_conv(up_samped))
         return unary_conv
 
@@ -345,8 +350,8 @@ class SRNetwork(nn.Module, UNetAbc):  # Bahman
         self.bottleneck = UNetConvBlock(
             in_channels=in_channels * 4,
             out_channels=in_channels * 8,
-            kernel_size=4,
-            stride=2,
+            kernel_size=3,
+            stride=1,
             padding=1,
         )
         self.dec = UNetDec2X(in_channels=in_channels, out_channels=out_channels)
@@ -357,12 +362,16 @@ class SRNetwork(nn.Module, UNetAbc):  # Bahman
     def forward(self, x):
         # TODO: I'm also not sure if people still use sigmoid as the last activation function for
         # UNets.
-        down_samped, uncb_d_1, uncb_d_2 = self.enc(x)
+        down_samped, resids = self.enc(x)
         bottleneck = self.bottleneck(down_samped)
-        up_samped = self.dec(bottleneck, uncb_d_1, uncb_d_2)
+        # TODO: we can try also adding the input as a redisual connection since 
+        # this is super resolution
+        up_samped = self.dec(bottleneck, resids)
         unary_conv = torch.sigmoid(self.unary_conv(up_samped))
         return unary_conv
 
+    def transform(self, *args):
+        pass
 
 class VectorQuantizer(nn.Module, VectorQuantizerAbc):
     """
@@ -384,9 +393,10 @@ class VectorQuantizer(nn.Module, VectorQuantizerAbc):
         # since the 'volume' of codebook tensors are supposed to be limited.
         # https://github.com/airalcorn2/vqvae-pytorch/blob/021a7d79cbde845dd322bc0b97f37b08230d3cdc/vqvae.py#L173
         self.lim_encodings = 3**0.5
-        self.codebook = torch.tensor(
+        codebook = torch.tensor(
             torch.rand(self.shape_encodings) * self.lim_encodings, requires_grad=True
         )
+        self.register_parameter('codebook', nn.Parameter(codebook))
 
     def forward(self, x):
         # x will have the shape B, D, W, H
@@ -402,20 +412,26 @@ class VectorQuantizer(nn.Module, VectorQuantizerAbc):
         # encoding_indices.shape = B * H * W
         # replace every vector with its closest neighbour in the codebook:
         encoding_quantized = F.embedding(
-            encoding_indices.view(x.shape[0], x.shape[2], x.shape[3]), self.codebook
+            encoding_indices.view(x.shape[0], *x.shape[2:]), self.codebook
         )
         # Bring the D dimension back to idx 1:
         encoding_quantized = encoding_quantized.permute(0, 3, 1, 2)
-        return encoding_quantized, encoding_indices.view(x.shape[0], -1)
 
-    def backward(self, grad_output):
-        """
-        The https://arxiv.org/abs/1711.00937.pdf paper does straight through gradient estimator,
-        for part 1 of the equation 3, the loss for the second part and the 3rd part will be calculated
-        afterwards.
-        """
-        gradinput = F.hardtanh(grad_output)
-        return gradinput
+        dict_loss = ((x.detach()-encoding_quantized) ** 2).mean()
+        comm_loss = ((x-encoding_quantized.detach()) ** 2).mean()
+        encoding_quantized = x + (encoding_quantized - x).detach()  # straight-through grad
+        return (encoding_quantized, encoding_indices.view(x.shape[0], -1),
+                dict_loss, comm_loss)
+
+    # def backward(self, grad_output):
+    #     """
+    #     The https://arxiv.org/abs/1711.00937.pdf paper does straight through gradient estimator,
+    #     for part 1 of the equation 3, the loss for the second part and the 3rd part will be calculated
+    #     afterwards.
+    #     """
+    #     return grad_output.copy()
+    #     gradinput = F.hardtanh(grad_output)
+    #     return gradinput
     
 
     def quantize(self, spatial_feats: SpatialFeats) -> SpatialTokens:
@@ -428,11 +444,12 @@ class InpaintingNetwork(nn.Module, InpaintingNetworkAbc):  # Bahman
         super().__init__()
         self.network = UNet(in_channels=dim_encodings, out_channels=dim_encodings)
 
-    def forward(self, x, corrupted_token_indexes):
+    def forward(self, x, noise_mask):
         # corrupted_token_indexes.shape = B, D, W, H (binary mask)
-        mask = torch.ones_like(x)
-        mask[corrupted_token_indexes] = 0
-        masked_tokens = x * mask
+        # mask = torch.ones_like(x)
+        # print(corrupted_token_indexes)
+        # mask[corrupted_token_indexes] = 0
+        masked_tokens = torch.einsum('bchw,bhw->bchw',x, noise_mask)
         output = self.network(masked_tokens)
         return output
 
@@ -443,61 +460,6 @@ class InpaintingNetwork(nn.Module, InpaintingNetworkAbc):  # Bahman
         pass
 
 
-class SuperResolutionModule(nn.Module, SuperResolutionAbc):  # Bahman
-
-    def __init__(
-        self,
-        fmri_encoder,
-        image_encoder_small,
-        image_encoder_large,
-        vector_quantizer_fmri,
-        vector_quantizer_img_small,
-        vector_quantizer_img_large,
-        token_classifier,
-        inpainting_network,
-        image_decoder_large,
-        resize_factor=2,
-        img_size=[224, 224],
-        dim_encodings = 8
-    ) -> None:
-        super().__init__()
-        self.resize_factor = resize_factor
-        self.img_size = img_size
-        self.down_scaled_size = [int(d) for d in img_size / resize_factor]
-        self.fmri_enc = fmri_encoder
-        self.img_enc_s = image_encoder_small
-        self.img_enc_l = image_encoder_large
-        self.img_dec_l = image_decoder_large
-        self.fmri_vq = vector_quantizer_fmri
-        self.img_vq_s = vector_quantizer_img_small
-        self.img_vq_l = vector_quantizer_img_large
-        self.token_classifier = token_classifier
-        self.inpainting_network = inpainting_network
-        self.sr = SRNetwork(in_channels=dim_encodings, out_channels=8)
-
-    def downsize_image(self, image):
-        visionF.resize(image, self.down_scaled_size)
-
-    def forward_train(self, y):
-        y_ds = self.downsize_image(y)
-        z_ds = self.img_vq_s(self.img_enc_s(y_ds))
-        z_sr = self.sr(z_ds)
-        z = self.img_vq_l(self.img_enc_l(y))
-        y_sr = self.img_dec_l(z_sr)
-        y = self.img_dec_l(z)
-        return y, z , y_sr, z_sr
-
-
-    def forward(self, x):
-        x_mismatches = self.token_classifier(x)
-        x_corrected = self.inpainting_network(x, x_mismatches)
-        x_sr = self.sr(x_corrected)
-        y_sr = self.img_dec_l(x_sr)
-        return y_sr
-
-    def transform(self, spatial_tokens: SpatialTokens) -> SpatialTokens:
-        pass
-
 
 class TokenNoising(nn.Module):
     
@@ -507,13 +469,13 @@ class TokenNoising(nn.Module):
 
     def forward(self, x):
         x_clone = x.clone().detach()
-        noise_mask = torch.bernoulli(torch.ones_like(x_clone) * (1 - self.noise_rate))
-        x_clone =  x_clone * noise_mask
+        noise_mask = torch.bernoulli(torch.ones([x_clone.shape[0], *x_clone.shape[2:]]) * (1 - self.noise_rate))
+        # print(x_clone.shape, noise_mask.shape)
+        x_clone = torch.einsum('bchw,bhw->bchw', x_clone, noise_mask)
         return x_clone, noise_mask
 
     def set_noise_rate(self, rate):
         self.noise_rate = rate
-
 
 class ResBlock(nn.Module):
     def __init__(self, in_channels, res_channels):
@@ -528,43 +490,42 @@ class ResBlock(nn.Module):
 
         out = self.conv1(x)
         out = self.relu1(out)
+
         out = self.conv2(out)
+        out = out + residual
         out = self.relu2(out)
 
-        out = out + residual
-        out = F.relu(out)
         return out
 
 
-EncoderConvBlock = UNetConvBlock
+# EncoderConvBlock = UNetConvBlock
 
 class DecoderConvBlock(nn.Module):
     def __init__(self, in_channels):
         super().__init__()
-        self.conv_t_1 = nn.ConvTranspose2d(in_channels, 3, kernel_size=4, stride=2, padding=1)
-        self.batch_norm_1 = nn.BatchNorm2d(3)
-        self.conv_t_2 = nn.ConvTranspose2d(3, 3, kernel_size=4, stride=2, padding=1)
-        self.batch_norm_2 = nn.BatchNorm2d(3)
+        self.conv_t_1 = nn.ConvTranspose2d(in_channels, in_channels, kernel_size=4, stride=2, padding=1)
+        self.batch_norm_1 = nn.BatchNorm2d(in_channels)
+        self.conv_t_2 = nn.ConvTranspose2d(in_channels, 3, kernel_size=4, stride=2, padding=1)
 
     def forward(self, x):
         x = self.conv_t_1(x)
         x = self.batch_norm_1(x)
         x = F.relu(x)
         x = self.conv_t_2(x)
-        x = self.batch_norm_2(x)
-        x = F.relu(x)
         return x
 
 
 class ImageEncoder(ImageEncoderAbc, nn.Module):
-    def __init__(self, out_channels) -> None:
+    def __init__(self, out_channels, in_channels=3) -> None:
         super().__init__()
-        self.conv_block = EncoderConvBlock(3, out_channels, kernel_size=4, stride=2, padding=1)
-        self.res_block = ResBlock(out_channels, out_channels)
+        self.conv_block = UNetConvBlock(in_channels, out_channels, kernel_size=4, stride=2, padding=1)
+        self.res_block1 = ResBlock(out_channels, out_channels//2)
+        self.res_block2 = ResBlock(out_channels, out_channels//2)
 
     def forward(self, x):
         x = self.conv_block(x)
-        x = self.res_block(x)
+        x = self.res_block1(x)
+        x = self.res_block2(x)
         return x
 
     def encode(self, x):
@@ -574,11 +535,13 @@ class ImageEncoder(ImageEncoderAbc, nn.Module):
 class ImageDecoder(ImageDecoderAbc, nn.Module):
     def __init__(self, in_channels):
         super().__init__()
-        self.res_block = ResBlock(in_channels, in_channels)
+        self.res_block1 = ResBlock(in_channels, in_channels//2)
+        self.res_block2 = ResBlock(in_channels, in_channels//2)
         self.conv_block = DecoderConvBlock(in_channels)
 
     def forward(self, x):
-        x = self.res_block(x)
+        x = self.res_block1(x)
+        x = self.res_block2(x)
         x = self.conv_block(x)
         return x
 
@@ -586,54 +549,44 @@ class ImageDecoder(ImageDecoderAbc, nn.Module):
         return self.forward(x)
 
 
-class VqVae(VqVaeAbc):
+class VqVae(nn.Module):
     CODEBOOK_DIM = 8
-    CODEBOOK_SIZE = 128
+    CODEBOOK_SIZE = 32
 
     LR = 2e-4
     ENCODER_ALPHA = 0.25
 
-    def __init__(self) -> None:
-        self.encoder_ = ImageEncoder(self.CODEBOOK_DIM)
+    def __init__(self, in_channels=3) -> None:
+        super().__init__()
+        self.encoder_ = ImageEncoder(self.CODEBOOK_DIM, in_channels=in_channels)
         self.decoder_ = ImageDecoder(self.CODEBOOK_DIM)
         self.quantizer_ = VectorQuantizer(dim_encodings=self.CODEBOOK_DIM, num_encodings=self.CODEBOOK_SIZE)
 
     def fit(self, img_dataset: ImageDataset):
-        loader = torch.utils.data.DataLoader(img_dataset, batch_size=32)
+        pass # not used; check train phase_1 instead
 
-        params = itertools.chain(
-            self.encoder_.parameters(),
-            self.quantizer_.parameters(),
-            self.decoder_.parameters())
-        optimizer = torch.optim.Adam(params, lr=self.LR)
-
-        for epoch in range(100):
-            print("Training Epoch", epoch)
-            for orig in loader:
-                spatial_feats = self.encoder_.encode(orig)
-                spatial_tokens, __ = self.quantizer_.quantize(spatial_feats)
-                reconstructed = self.decoder_.decode(spatial_tokens)
-
-                loss = (
-                    (reconstructed - orig).norm(2)
-                    + (spatial_feats.detach() - spatial_tokens).norm(2)
-                    + (spatial_tokens.detach() - spatial_feats).norm(2) * self.ENCODER_ALPHA
-                )
-                loss.backward()
-
-                optimizer.step()
-                optimizer.zero_grad()
-
-    def encode(self, img: Image) -> SpatialTokens:
+    def encode(self, img) -> SpatialTokens:
         spatial_feats = self.encoder_.encode(img)
-        spatial_tokens = self.quantize(spatial_feats)
-        return spatial_tokens
+        spatial_tokens, token_indices, __, __ = self.quantize(spatial_feats)
+        return spatial_tokens, token_indices
 
-    def decode(self, spatial_tokens: SpatialTokens) -> Image:
+    def decode(self, spatial_tokens: SpatialTokens) -> ImNetImage:
         return self.decoder_.decode(spatial_tokens)
 
-    def quantize(self, spatial_feats: SpatialFeats) -> SpatialTokens:
+    def quantize(self, spatial_feats: SpatialFeats):
+        # Returns both quantized vecotrs and indexes!
+        # TODO: fix typing annotations
         return self.quantizer_.quantize(spatial_feats)
+
+    def save(self, dirname, epoch):
+        torch.save(self.encoder_.state_dict(), f'{dirname}/encoder-epoch-{epoch}.pth')
+        torch.save(self.decoder_.state_dict(), f'{dirname}/decoder-epoch-{epoch}.pth')
+        torch.save(self.quantizer_.state_dict(), f'{dirname}/quantizer-epoch-{epoch}.pth')
+
+    def load(self, dirname, epoch):
+        self.encoder_.load_state_dict(torch.load(f'{dirname}/encoder-epoch-{epoch}.pth'))
+        self.decoder_.load_state_dict(torch.load(f'{dirname}/decoder-epoch-{epoch}.pth'))
+        self.quantizer_.load_state_dict(torch.load(f'{dirname}/quantizer-epoch-{epoch}.pth'))
 
 
 class Denoiser(DenoiserAbc):
@@ -648,9 +601,10 @@ class TokenClassifier(TokenClassifierAbc, nn.Module):
 
     with 2 downsampling and 2 upsampling layers ..."""
 
-    LR = 1e-4  # TODO TBD
+    LR = 2e-4
 
     def __init__(self):
+        super().__init__()
         self.unet= UNet(in_channels=VqVae.CODEBOOK_DIM, out_channels=1)  # True/False in NoiseTable
 
     def forward(self, x):
@@ -690,10 +644,11 @@ class MLP(nn.Module):
         self.out_width = out_width  # assuming squares
         self.out_dims = VqVae.CODEBOOK_DIM * self.out_width**2
 
-        self.fc1 = nn.Linear(self.in_dims, self.out_dims)
+        self.fc1 = nn.Linear(self.in_dims, self.in_dims//2)
         self.relu1 = nn.ReLU()
-        self.fc2 = nn.Linear(self.out_dims, self.out_dims)
+        self.fc2 = nn.Linear(self.in_dims//2, self.in_dims//10)
         self.relu2 = nn.ReLU()
+        self.fc3 = nn.Linear(self.in_dims//10, self.out_dims)
 
     def forward(self, x):
         x = x.view(-1, self.in_dims)
@@ -701,6 +656,7 @@ class MLP(nn.Module):
         x = self.relu1(x)
         x = self.fc2(x)
         x = self.relu2(x)
+        x = self.fc3(x)
         return x.view(-1, VqVae.CODEBOOK_DIM, self.out_width, self.out_width)
 
 
@@ -717,3 +673,53 @@ class FMRIEncoder(FMRIEncoderAbc, nn.Module):
 
     def encode(self, fmri: FMRI) -> SpatialFeats:
         return self.forward(fmri)
+
+
+class SuperResolutionModule(nn.Module, SuperResolutionAbc):  # Bahman
+
+    def __init__(
+        self,
+        vq_vae_s: VqVae,
+        vq_vae_l: VqVae,
+        vq_vae_fmri: VqVae,
+        token_classifier: TokenClassifier,
+        inpainting_network: InpaintingNetwork,
+        resize_factor:float=2,
+        img_size:tuple=[224, 224],
+        dim_encodings:int = 8
+    ) -> None:
+        super().__init__()
+        self.resize_factor = resize_factor
+        self.img_size = img_size
+        self.down_scaled_size = [int(d/resize_factor) for d in img_size]
+        self.vq_vae_fmri = vq_vae_fmri
+        self.vq_vae_s = vq_vae_s
+        self.vq_vae_l = vq_vae_l
+        self.token_classifier = token_classifier
+        self.inpainting_network = inpainting_network
+        self.sr = SRNetwork(in_channels=dim_encodings, out_channels=8)
+
+    def downsize_image(self, image):
+        return visionF.resize(image, self.down_scaled_size)
+
+    def forward_train(self, y):
+        y_ds = self.downsize_image(y)
+        z_ds, _ = self.vq_vae_s.encode(y_ds)
+        z_sr = self.sr(z_ds)
+        z_l = self.vq_vae_l.encoder_.encode(y)
+        z_l_q, z_l_q_idx = self.vq_vae_l.quantize(z_l)
+        z_sr_q, z_sr_q_idx = self.vq_vae_l.quantize(z_sr)
+        y_sr = self.vq_vae_l.decode(z_sr_q)
+        y_l = self.vq_vae_l.decode(z_l)
+        return y_l, z_l, z_l_q, z_l_q_idx , y_sr, z_sr, z_sr_q, z_sr_q_idx
+
+
+    def forward(self, x):
+        x_mismatches = self.token_classifier(x)
+        x_corrected = self.inpainting_network(x, torch.squeeze(x_mismatches))
+        x_sr = self.sr(x_corrected)
+        y_sr = self.vq_vae_l.decode(x_sr)
+        return y_sr
+
+    def transform(self, spatial_tokens: SpatialTokens) -> SpatialTokens:
+        pass
