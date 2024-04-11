@@ -165,14 +165,7 @@ After training, the entire pipeline was able to run, even though the reconstruct
 \textbf{Qualitative results.} \cref{decoded-imgs} shows some example images and their reconstructed instances. Comparing to the original stimulus on the top row, the fMRI decoded  images on the bottom row recovered some shape info. Color was off while brightness seemed reasonable.
 Comparing the last row of \cref{decoded-imgs} to the last column of original results in \cref{orig-figure}, they clearly had better color restoration and the outlines seemed smoother with more details.
 
-
 As a side note, our trained VQ-VAE did not produce as good results (\cref{decoded-imgs}, 2nd row) as in \cite{oordNeuralDiscreteRepresentation2018}. And this set the upper bound of how well fMRI representation could be decoded.
-
-
-\textbf{Quantitative results.}
-\todo 
-
-\cref{metric-table} shows the comparison of evaluation metrics between the original results and our reproduction. ...
 
 \begin{table}[b]
 \caption{Comparison of quantitative evaluation metrics.}
@@ -183,11 +176,11 @@ As a side note, our trained VQ-VAE did not produce as good results (\cref{decode
 \begin{sc}
 \begin{tabular}{lrrc}
 \toprule
-Metric & Original & Ours & Reproduced? \\
+Metric & Original & Ours \\
 \midrule
-SSIM    & 0.492 & TODO & $\times$ \\
-PSNR    & 13.4 &  TODO & $\times$ \\
-PCC     & 0.551 & TODO & $\times$ \\
+SSIM    & 0.492 & 0.020 \\
+PSNR    & 13.4 &  55.6 \\
+PCC     & 0.551 & -0.028 \\
 \bottomrule
 \end{tabular}
 \end{sc}
@@ -196,6 +189,7 @@ PCC     & 0.551 & TODO & $\times$ \\
 \vskip -0.1in
 \end{table}
 
+\textbf{Quantitative results.} \cref{metric-table} shows the comparison of evaluation metrics between the original results and our reproduction. For all three metrics, it is the greater the better. Our low SSIM and PCC reflected the fact that the reproduction was not successful. See next section for a possible explanation of the high PSNR.
 
 \medskip
 
