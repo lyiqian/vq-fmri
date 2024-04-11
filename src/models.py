@@ -355,8 +355,10 @@ class SRNetwork(nn.Module, UNetAbc):  # Bahman
             padding=1,
         )
         self.dec = UNetDec2X(in_channels=in_channels, out_channels=out_channels)
-        self.unary_conv = nn.Conv2d(
-            in_channels=in_channels * 2, out_channels=out_channels, kernel_size=1
+        # update: added another conv layer and deleted the sigmoid
+        self.unary_conv = nn.Sequential(
+            nn.Conv2d(in_channels=in_channels * 2, out_channels=in_channels, kernel_size=1),
+            nn.Conv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=1)
         )
 
     def forward(self, x):
@@ -367,7 +369,8 @@ class SRNetwork(nn.Module, UNetAbc):  # Bahman
         # TODO: we can try also adding the input as a redisual connection since 
         # this is super resolution
         up_samped = self.dec(bottleneck, resids)
-        unary_conv = torch.sigmoid(self.unary_conv(up_samped))
+        # unary_conv = torch.sigmoid(self.unary_conv(up_samped))
+        unary_conv = self.unary_conv(up_samped)
         return unary_conv
 
     def transform(self, *args):
@@ -553,7 +556,7 @@ class ImageDecoder(ImageDecoderAbc, nn.Module):
 class VqVae(nn.Module):
     CODEBOOK_DIM = 8
     # TODO: change this if needed:
-    CODEBOOK_SIZE = 32
+    CODEBOOK_SIZE = 128
 
     LR = 2e-4
     ENCODER_ALPHA = 0.25

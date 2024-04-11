@@ -73,7 +73,7 @@ def train_phase1(
     writer = SummaryWriter(log_dir=log_dir)
     glb_iter = 0
     test_data = next(iter(train_loader)).to(device)
-    optimizer = torch.optim.Adam(vq_vae.parameters(), lr=1e-2)
+    optimizer = torch.optim.Adam(vq_vae.parameters(), lr=2e-4)
 
     # vq_vae = vq_vae.to(device)
     # vq_vae.load_state_dict(torch.load(model_dir / "vq_vae_64000.pth"))
@@ -137,14 +137,21 @@ def train_phase2(
     log_dir = Path(log_dir) / "phase2"
     log_dir.mkdir(exist_ok=True, parents=True)
 
+    fmri_encoder.to(device)
+    trained_vq_vae.to(device)
+
     writer = SummaryWriter(log_dir=log_dir)
     glb_iter = 0
 
     optimizer = torch.optim.Adam(fmri_encoder.parameters(), lr=2e-4)
+    test_images, test_fmris = next(iter(validation_loader))
+    test_images = test_images.to(device)
+    test_fmris = test_fmris.to(device)
 
     for ep in range(epochs):
-        print("Epoch", ep)
-        for images, fmris in train_loader:
+        for images, fmris in tqdm(train_loader):
+            images = images.to(device)
+            fmris = fmris.to(device)
             optimizer.zero_grad()
 
             fmri_feats = fmri_encoder(fmris)
@@ -156,30 +163,35 @@ def train_phase2(
 
             loss.backward()
             optimizer.step()
+            if glb_iter % 1000 == 0:
+                writer.add_scalar("phase2/loss", loss.item(), glb_iter)
 
-            writer.add_scalar("phase2/loss", loss.item(), glb_iter)
+                fmri_feats = fmri_encoder(test_fmris)
+                fmri_tokens, fmri_codebook_idxs, _, _ = trained_vq_vae.quantize(fmri_feats)
+                img_tokens, img_codebook_idxs = trained_vq_vae.encode(images)
+                val_loss = lossVQ_MSE(
+                    fmri_feats, fmri_codebook_idxs, img_tokens.detach(), img_codebook_idxs
+                )
+                writer.add_scalar("phase2/val_loss", val_loss.item(), glb_iter)
+                output_images = trained_vq_vae.decode(fmri_tokens)
+                grid = make_grid(output_images.cpu().data, nrow=4)
+                writer.add_image("phase2/decoded_img", grid, glb_iter)
+                grid = make_grid(test_images.cpu().data, nrow=4)
+                writer.add_image("phase2/original_img", grid, glb_iter)
+
+                mismatches = (  # taken from lossVQ_MSE
+                    torch.ne(fmri_codebook_idxs, img_codebook_idxs).float()
+                        .view([fmri_feats.shape[0], *fmri_feats.shape[2:]])
+                )
+                mismatch_rate = mismatches.mean()
+                writer.add_scalar("phase2/val_mismatch_rate", mismatch_rate.item(), glb_iter)
             glb_iter += 1
 
-        for images, fmris in validation_loader:
-            fmri_feats = fmri_encoder(fmris)
-            fmri_tokens, fmri_codebook_idxs, __, __ = trained_vq_vae.quantize(fmri_feats)
-            img_tokens, img_codebook_idxs = trained_vq_vae.encode(images)
-            val_loss = lossVQ_MSE(
-                fmri_feats, fmri_codebook_idxs, img_tokens.detach(), img_codebook_idxs
-            )
-            writer.add_scalar("phase2/val_loss", val_loss.item(), glb_iter)
-
-            mismatches = (  # taken from lossVQ_MSE
-                torch.ne(fmri_codebook_idxs, img_codebook_idxs).float()
-                    .view([fmri_feats.shape[0], *fmri_feats.shape[2:]])
-            )
-            mismatch_rate = mismatches.mean()
-            writer.add_scalar("phase2/val_mismatch_rate", mismatch_rate.item(), glb_iter)
-            break  # only one batch in val loader
-
-        if (ep+1) % 30 == 0:
+        if (ep+1) % 300 == 0:
             print("Saving phase2 model @ Epoch", ep)
             torch.save(fmri_encoder.state_dict(), f'{model_dir}/fmri-encoder-epoch-{ep}.pth')
+
+
 
 
 def train_phase3(
@@ -301,23 +313,32 @@ def train_sr(
     log_dir = Path(log_dir) / "sr"
     log_dir.mkdir(exist_ok=True, parents=True)
     sr_module.to(device)
+    vq_vae_large.load(dirname='./states/apr10/sr/sr/phase1/', epoch=102000)
     vq_vae_large.to(device)
     # first train a larger vq-vae
-    train_phase1(
-        image_loader, None, None, 
-        vq_vae_large, 1, beta, log_dir, model_dir, resume_from=resume_from_ph1
-    )
+    # train_phase1(
+    #     image_loader, None, None, 
+    #     vq_vae_large, 4, beta, log_dir, model_dir, resume_from=resume_from_ph1
+    # )
     print('###################################')
     print('###Finsihed training large VQVAE###')
     print('###################################')
-
     # logging stuff:
     writer = SummaryWriter(log_dir=log_dir)    
     test_data = next(iter(image_loader)).to(device)
     # TODO tune lr value
     sr_module.vq_vae_l = vq_vae_large
-    optimizer_sr = torch.optim.Adam(sr_module.sr.parameters(), lr=1e-4)
+    optimizer_sr = torch.optim.Adam(sr_module.sr.parameters(), lr=VqVae.LR)
     glb_iter = 0
+
+    if resume_from > 0:
+        glb_iter = resume_from
+        sr_module.load_state_dict(torch.load(model_dir / "sr_module_{}.pth".format(glb_iter), strict=False))
+        optimizer_sr.load_state_dict(torch.load(model_dir / "sr_module_opt_{}.pth".format(glb_iter)))
+        sr_module.train()
+        glb_iter += 1
+
+
     for epoch in range(epochs):
         for i, images in tqdm(enumerate(image_loader)):
             images = images.to(device)
@@ -340,10 +361,10 @@ def train_sr(
                 with torch.no_grad():
                     y_l, _, _, _, y_sr, _, _, _ = sr_module.forward_train(test_data)
                 grid = make_grid(y_sr.cpu().data)
-                writer.add_image("phase1/decoded_img", grid, glb_iter)
+                writer.add_image("sr/decoded_img", grid, glb_iter)
                 grid = make_grid(y_l.cpu().data)
-                writer.add_image("phase1/decoded_img", grid, glb_iter)
-                writer.add_scalar("phase1/loss", code_book_loss.item(), glb_iter)
+                writer.add_image("sr/original_img", grid, glb_iter)
+                writer.add_scalar("sr/loss", code_book_loss.item(), glb_iter)
             if glb_iter % 2000 == 0:
                 torch.save(sr_module.state_dict(), model_dir / 'sr_module_{}.pth'.format(glb_iter))
                 torch.save(optimizer_sr.state_dict(), model_dir / 'sr_module_{}_opt.pth'.format(glb_iter))

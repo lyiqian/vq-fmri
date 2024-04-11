@@ -5,7 +5,7 @@ import torch
 
 from data import GODLoader, ImageLoader
 from train import train_phase1, train_phase2, train_phase3, train_sr
-from inference import inference
+from inference import inference, inference_no_sr
 import models
 from pathlib import Path
 
@@ -52,9 +52,32 @@ def main():
             log_dir=args.log_dir,
             model_dir=args.model_dir,
         )
+
+    if args.phase == "phase2":
+        image_loader = GODLoader(data_dir=args.data_dir, batch_size=32)
+        train_loader = image_loader.get_train_loader()
+        test_loader = image_loader.get_test_loader()
+        trained_vq_vae = models.VqVae()
+        trained_vq_vae.load('./states/phase1/apr6-full-vqvae', 4)
+        # fmri_encoder = models.FMRIEncoder(in_dims=4643, out_width=32)
+        fmri_encoder = models.FMRIEncoder(in_dims=4466, out_width=32)
+        epochs = 3000
+        beta = 1
+        # train_phase2(image_loader, epochs, vq_vae, )
+        train_phase2(
+            train_loader=train_loader,
+            validation_loader=test_loader,
+            epochs=epochs,
+            fmri_encoder=fmri_encoder,
+            trained_vq_vae=trained_vq_vae,
+            log_dir=args.log_dir,
+            model_dir=args.model_dir
+        )
+
+
     if args.phase == "phase3":
         trained_vq_vae = models.VqVae()
-        trained_vq_vae.load(args.model_dir, 4)
+        trained_vq_vae.load('./states/phase1/apr6-full-vqvae', 4)
         epochs = 50
         beta = 1
         image_loader = ImageLoader(data_dir=args.data_dir, batch_size=16, image_size=128)
@@ -63,7 +86,7 @@ def main():
         token_classifier.train()
         token_inpainting = models.InpaintingNetwork(trained_vq_vae.CODEBOOK_DIM)
         token_inpainting.train()
-        lr = 1e-3
+        lr = 2e-4
         train_phase3(
             train_loader,
             epochs,
@@ -82,7 +105,7 @@ def main():
         )
         image_loader = image_loader.get_train_loader()
         vq_vae_s = models.VqVae()
-        vq_vae_s.load(args.model_dir, 4)
+        vq_vae_s.load('./states/phase1/apr6-full-vqvae', 4)
         vq_vae_s.train()
         vq_vae_l = models.VqVae(codebook_size=256)
         # We can get away with not having any token classifier, inpainting or fmri moudles
@@ -108,34 +131,20 @@ def main():
             args.model_dir,
             resume_from_ph1=args.resume
         )
+
     if args.phase == "inf":
         god_loader = GODLoader(data_dir=args.data_dir, batch_size=32)
-        test_loader = god_loader.get_test_loader()
-        inference(test_loader)
+        # test_loader = god_loader.get_test_loader()
+        test_loader = god_loader.get_train_loader()
+        inference(test_loader, models_dir=args.model_dir)
+
+    if args.phase == "inf_n":
+        god_loader = GODLoader(data_dir=args.data_dir, batch_size=32)
+        # test_loader = god_loader.get_test_loader()
+        test_loader = god_loader.get_train_loader()
+        inference_no_sr(test_loader, models_dir=args.model_dir)
 
 
-    # # load networks
-    # vq = models.VectorQuantizer()
-    # fmri_enc = models.FMRIEncoder()
-    # token_clf = models.TokenClassifier()
-    # inpainting = models.InpaintingNetwork()
-    # sr = models.SuperResolutionModule()
-    # img_dec = models.ImageDecoder()
-    # vq.load_state_dict(torch.load(f'{args.weight_dir}/{args.vq}.pth'))
-    # fmri_enc.load_state_dict(torch.load(f'{args.weight_dir}/{args.fmri_enc}.pth'))
-    # token_clf.load_state_dict(torch.load(f'{args.weight_dir}/{args.token_clf}.pth'))
-    # inpainting.load_state_dict(torch.load(f'{args.weight_dir}/{args.inpainting}.pth'))
-    # sr.load_state_dict(torch.load(f'{args.weight_dir}/{args.super_res}.pth'))
-    # img_dec.load_state_dict(torch.load(f'{args.weight_dir}/{args.img_dec}.pth'))
-
-    # # fMRI to image
-    # reconstructed_img = decode_fmri(
-    #     fmri, vq, fmri_enc, token_clf, inpainting, sr, img_dec,
-    # )
-
-    # # display a sample
-    # plt.imshow(reconstructed_img[0].permute(1, 2, 0))
-    # plt.show()
 
 
 def decode_fmri(

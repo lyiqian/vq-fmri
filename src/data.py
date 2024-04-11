@@ -26,7 +26,7 @@ class GODDataset(Dataset):
         df_path = data_dir / 'images' / df_fname
         self.img_ids = pd.read_csv(df_path, header=None)
 
-        subject_files = [p for p in data_dir.glob("*.h5")]
+        # subject_files = [p for p in data_dir.glob("*.h5")]
         subject_files = [p for p in data_dir.glob("Subject1.h5")]
         fmri_data_stack = []
         image_id_stack = []
@@ -43,19 +43,22 @@ class GODDataset(Dataset):
             split_image_ids = image_ids[split_indexes[:, 0]]
             image_id_stack.append(split_image_ids)
 
-        # # Determine the maximum number of rows and columns
-        # max_rows = max(array.shape[0] for array in fmri_data_stack)
-        # max_cols = max(array.shape[1] for array in fmri_data_stack)
-        # # Pad arrays with zeros to have the same shape
-        # padded_fmri_data = []
-        # for fmri_data in fmri_data_stack:
-        #     padding = ((0, max_rows - fmri_data.shape[0]), (0, max_cols - fmri_data.shape[1]))  # Define the padding
-        #     padded_fmri_data.append(np.pad(fmri_data, padding, 'constant', constant_values=0))  # Pad with zeros
+        # Determine the maximum number of rows and columns
+        max_rows = max(array.shape[0] for array in fmri_data_stack)
+        max_cols = max(array.shape[1] for array in fmri_data_stack)
+        # print(max_cols)
+        # Pad arrays with zeros to have the same shape
+        padded_fmri_data = []
+        for fmri_data in fmri_data_stack:
+            padding = ((0, 0), (0, max_cols - fmri_data.shape[1]))  # Define the padding
+            padded_fmri_subject = np.pad(fmri_data, padding, 'constant', constant_values=0)
+            padded_fmri_data.append(padded_fmri_subject)  # Pad with zeros
 
-        # # Now you can concatenate the padded data
-        # self.fmri_data_all = np.concatenate(padded_fmri_data, axis=0)
+        # Now you can concatenate the padded data
+        self.fmri_data_all = np.float32(np.concatenate(padded_fmri_data, axis=0))
+        # print(self.fmri_data_all.shape)
 
-        self.fmri_data_all = np.float32(np.concatenate(fmri_data_stack))
+        # self.fmri_data_all = np.float32(np.concatenate(fmri_data_stack))
         self.image_ids_all = np.concatenate(image_id_stack)
         self.image_paths = []
         self.img_ids = self.img_ids.set_index(0, drop=True)
@@ -85,7 +88,7 @@ class GODDataset(Dataset):
 class GODLoader():
     def __init__(self, data_dir, batch_size=16) -> None:
         image_transforms = transforms.Compose([
-            transforms.Resize((64, 64)),      # Resize the image to 64x64 pixels
+            transforms.Resize((128, 128)),      # Resize the image to 64x64 pixels
             transforms.ToTensor(),              # Convert the image to a PyTorch tensor
             # transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),  # Normalize with ImageNet stats
         ])
@@ -161,7 +164,7 @@ class ImageLoader():
         image_transforms = transforms.Compose([
             transforms.Resize((image_size, image_size)),      # Resize the image to 256x256 pixels
             transforms.ToTensor(),              # Convert the image to a PyTorch tensor
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),  # Normalize with ImageNet stats
+            # transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),  # Normalize with ImageNet stats
         ])
         self.batch_size = batch_size
         self.train_loader = DataLoader(ImageDataset(data_dir=data_dir, image_transforms=image_transforms, split='train'), batch_size=self.batch_size, shuffle=True)
