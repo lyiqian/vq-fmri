@@ -42,8 +42,20 @@ class GODDataset(Dataset):
             image_ids = np.array(data.select('Label'))[:, 0]
             split_image_ids = image_ids[split_indexes[:, 0]]
             image_id_stack.append(split_image_ids)
-        
-        self.fmri_data_all = np.concatenate(fmri_data_stack)
+
+        # # Determine the maximum number of rows and columns
+        # max_rows = max(array.shape[0] for array in fmri_data_stack)
+        # max_cols = max(array.shape[1] for array in fmri_data_stack)
+        # # Pad arrays with zeros to have the same shape
+        # padded_fmri_data = []
+        # for fmri_data in fmri_data_stack:
+        #     padding = ((0, max_rows - fmri_data.shape[0]), (0, max_cols - fmri_data.shape[1]))  # Define the padding
+        #     padded_fmri_data.append(np.pad(fmri_data, padding, 'constant', constant_values=0))  # Pad with zeros
+
+        # # Now you can concatenate the padded data
+        # self.fmri_data_all = np.concatenate(padded_fmri_data, axis=0)
+
+        self.fmri_data_all = np.float32(np.concatenate(fmri_data_stack))
         self.image_ids_all = np.concatenate(image_id_stack)
         self.image_paths = []
         self.img_ids = self.img_ids.set_index(0, drop=True)
@@ -144,9 +156,10 @@ class ImageDataset(Dataset):
 #         return random_tensor
 
 class ImageLoader():
-    def __init__(self, data_dir, batch_size=16) -> None:
+    def __init__(self, data_dir, batch_size=16, image_size=256) -> None:
+        self.image_size = image_size
         image_transforms = transforms.Compose([
-            transforms.Resize((256, 256)),      # Resize the image to 256x256 pixels
+            transforms.Resize((image_size, image_size)),      # Resize the image to 256x256 pixels
             transforms.ToTensor(),              # Convert the image to a PyTorch tensor
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),  # Normalize with ImageNet stats
         ])
