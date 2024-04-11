@@ -1,7 +1,7 @@
 import torch
 import torchvision.transforms.v2.functional as tvf
 
-STANDARD_SIZE = 128
+STANDARD_SIZE = 64
 
 def standardize(img_tsr):
     """Crop and resize images to 128x128."""

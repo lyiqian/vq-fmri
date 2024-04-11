@@ -9,21 +9,12 @@ from models import (
     InpaintingNetwork,
     VqVae,
     VqVaeAbc,
-    FMRIEncoderAbc,
+    FMRIEncoder,
     UNet,
     SuperResolutionModule,
     MLP,
 )
 from losses import lossVQ, lossVQ_MSE, lossSR
-from models import (
-    TokenNoising,
-    TokenClassifier,
-    InpaintingNetwork,
-    VqVae,
-    VqVaeAbc,
-    FMRIEncoderAbc,
-    UNet,
-)
 from torch.nn import CrossEntropyLoss, BCELoss
 from torch.nn.functional import mse_loss
 from torch.utils.tensorboard import SummaryWriter
@@ -133,28 +124,62 @@ def train_phase1(
 
 
 def train_phase2(
-    train_loader,
-    epochs,
-    fmri_encoder: FMRIEncoderAbc,
-    trained_vq_vae: VqVaeAbc,
+        train_loader,
+        validation_loader,
+        epochs,
+        fmri_encoder: FMRIEncoder,
+        trained_vq_vae: VqVaeAbc,
+        log_dir: str,
+        model_dir: str,
 ):
+    model_dir = Path(model_dir) / "phase2"
+    model_dir.mkdir(exist_ok=True, parents=True)
+    log_dir = Path(log_dir) / "phase2"
+    log_dir.mkdir(exist_ok=True, parents=True)
+
+    writer = SummaryWriter(log_dir=log_dir)
+    glb_iter = 0
+
     optimizer = torch.optim.Adam(fmri_encoder.parameters(), lr=2e-4)
 
     for ep in range(epochs):
+        print("Epoch", ep)
         for images, fmris in train_loader:
             optimizer.zero_grad()
 
             fmri_feats = fmri_encoder(fmris)
-            fmri_tokens, fmri_codebook_idxs = trained_vq_vae.quantize(fmri_feats)
+            fmri_tokens, fmri_codebook_idxs, __, __ = trained_vq_vae.quantize(fmri_feats)
             img_tokens, img_codebook_idxs = trained_vq_vae.encode(images)
             loss = lossVQ_MSE(
-                fmri_feats, fmri_codebook_idxs, img_tokens, img_codebook_idxs
+                fmri_feats, fmri_codebook_idxs, img_tokens.detach(), img_codebook_idxs
             )
 
             loss.backward()
             optimizer.step()
 
-        print(f"Loss of last batch @ Epoch {ep}: {loss.item()}")
+            writer.add_scalar("phase2/loss", loss.item(), glb_iter)
+            glb_iter += 1
+
+        for images, fmris in validation_loader:
+            fmri_feats = fmri_encoder(fmris)
+            fmri_tokens, fmri_codebook_idxs, __, __ = trained_vq_vae.quantize(fmri_feats)
+            img_tokens, img_codebook_idxs = trained_vq_vae.encode(images)
+            val_loss = lossVQ_MSE(
+                fmri_feats, fmri_codebook_idxs, img_tokens.detach(), img_codebook_idxs
+            )
+            writer.add_scalar("phase2/val_loss", val_loss.item(), glb_iter)
+
+            mismatches = (  # taken from lossVQ_MSE
+                torch.ne(fmri_codebook_idxs, img_codebook_idxs).float()
+                    .view([fmri_feats.shape[0], *fmri_feats.shape[2:]])
+            )
+            mismatch_rate = mismatches.mean()
+            writer.add_scalar("phase2/val_mismatch_rate", mismatch_rate.item(), glb_iter)
+            break  # only one batch in val loader
+
+        if (ep+1) % 30 == 0:
+            print("Saving phase2 model @ Epoch", ep)
+            torch.save(fmri_encoder.state_dict(), f'{model_dir}/fmri-encoder-epoch-{ep}.pth')
 
 
 def train_phase3(

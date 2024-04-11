@@ -552,7 +552,9 @@ class ImageDecoder(ImageDecoderAbc, nn.Module):
 
 class VqVae(nn.Module):
     CODEBOOK_DIM = 8
-    CODEBOOK_SIZE = 128
+    # TODO: change this if needed:
+    CODEBOOK_SIZE = 32
+
     LR = 2e-4
     ENCODER_ALPHA = 0.25
 
@@ -645,8 +647,9 @@ class MLP(nn.Module):
         self.in_dims = in_dims
         self.out_width = out_width  # assuming squares
         self.out_dims = VqVae.CODEBOOK_DIM * self.out_width**2
+
         self.fc1 = nn.Linear(self.in_dims, self.in_dims//2)
-        self.relu1 = nn.ReLU() 
+        self.relu1 = nn.ReLU()
         self.fc2 = nn.Linear(self.in_dims//2, self.in_dims//10)
         self.relu2 = nn.ReLU()
         self.fc3 = nn.Linear(self.in_dims//10, self.out_dims)
