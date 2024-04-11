@@ -110,7 +110,7 @@ This report is for the course project of EECS6322 Winter 2024. An fMRI-to-image 
 \section{Paper Summary}
 \label{submission}
 
-The selected paper proposed an fMRI-to-image model named VQ-fMRI, which was based on VQ-VAE \cite{oordNeuralDiscreteRepresentation2018}. Vector quantization VAE is a derivation of regular VAE by replacing the continuous latent space with a discrete one. This discrete latent space was represented by a codebook containing a limited number of prototype vectors. An encoded image now consists of these prototype vectors at a lower spatial resolution.
+The selected paper proposed an fMRI-to-image model named VQ-fMRI, which was based on VQ-VAE \cite{oordNeuralDiscreteRepresentation2018}. Vector Quantization VAE is a derivation of regular VAE by replacing the continuous latent space with a discrete one. This discrete latent space was represented by a codebook containing a limited number of prototype vectors. An encoded image now consists of these prototype vectors at a lower spatial resolution.
 
 The proposed VQ-fMRI model first needs a trained VQ-VAE including its codebook, independent of fMRI data. Then, an fMRI encoder is guided by the codebook to learn to encode fMRI recordings to the discrete prototype vectors. After a series of learned de-noising and content completion processes for the encoded fMRI, it is decoded by the VQ-VAE decoder to reconstruct the image shown to the fMRI subject. Therefore, the reconstructed image uses information from both visual stimulus (fMRI) and past experience (codebook), which is one of the motivations of the paper.
 
@@ -119,10 +119,12 @@ The proposed VQ-fMRI model first needs a trained VQ-VAE including its codebook, 
 As stated by the authors and observed by us, the main contributions of the paper are:
 \begin{itemize}
 \item The Vector-Quantization fMRI decoding framework that uses both current signals and past knowledge to reconstruct images.
-\item The learned denoising and inpainting processes for encoded fMRI data, where the denoiser predicts at which spatial locations are the prototypes valid, and the inpainter completes the latent visual cue by replacing the invalid prototypes.
+\item The learned denoising and inpainting processes for encoded fMRI data, where the denoiser predicts at which spatial locations are the prototypes valid, and the inpainter completes the latent visual cue by replacing the invalid prototypes. This can be seen as an experience-based content completion  process.
 \item The downsampling and super-resolution component on the fMRI side that reduces the encoder's bias towards high-frequency features.
-\item Better results comparing to previous methods.
+\item Better results comparing to previous methods, in terms of color and high-level structure.
 \end{itemize}
+
+In summary, this paper proposed a framework that has sufficient capability and can be trained with limited fMRI data. This was achieved by first encoding fMRIs into a smaller discrete latent representation, then completing signals with a large model.
 
 
 \section{Reproduction Attempt}
