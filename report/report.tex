@@ -137,7 +137,9 @@ We planned to reproduce the main reconstruction results including their evaluati
 \item Phase IV: super-resolution model
 \end{itemize} 
 
-After implementing with PyTorch, we first trained a VQ-VAE on ImageNet as all remaining components are dependent on it. Since the paper did not explicitly state the image size, we picked 128x128 according to the VQ-VAE paper \cite{oordNeuralDiscreteRepresentation2018}. The fMRI encoder was then trained using the quantizer of the VQ-VAE and the GOD dataset \citep{horikawa2016} which contains fMRI recordings from five subjects and corresponding images. The denoiser, inpainter, and super-res model were trained last. Lab desktops and own laptops were the main computation resources we leveraged in this project.
+After implementing with PyTorch, we first trained a VQ-VAE on ImageNet as all remaining components are dependent on it. Since the paper did not explicitly state the image size, we picked 128x128 according to the VQ-VAE paper \cite{oordNeuralDiscreteRepresentation2018}. The fMRI encoder was then trained using the encoder \& quantizer of the VQ-VAE on the GOD dataset \citep{horikawa2016} which contains fMRI recordings from five subjects and corresponding images. The denoiser, inpainter, and super-res model were trained last. Lab desktops and own laptops were the main computation resources we leveraged in this project.
+
+After training, the entire pipeline was able to run, even though the reconstruction results were not ideal.
 
 \subsection{Our Results}
 
