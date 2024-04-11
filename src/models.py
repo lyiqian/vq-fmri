@@ -463,13 +463,14 @@ class InpaintingNetwork(nn.Module, InpaintingNetworkAbc):  # Bahman
 
 class TokenNoising(nn.Module):
     
-    def __init__(self, noise_rate) -> None:
+    def __init__(self, noise_rate, device) -> None:
         super().__init__()
         self.noise_rate = noise_rate
+        self.device = device
 
     def forward(self, x):
         x_clone = x.clone().detach()
-        noise_mask = torch.bernoulli(torch.ones([x_clone.shape[0], *x_clone.shape[2:]]) * (1 - self.noise_rate))
+        noise_mask = torch.bernoulli(torch.ones([x_clone.shape[0], *x_clone.shape[2:]]) * (1 - self.noise_rate)).to(self.device)
         # print(x_clone.shape, noise_mask.shape)
         x_clone = torch.einsum('bchw,bhw->bchw', x_clone, noise_mask)
         return x_clone, noise_mask
@@ -552,15 +553,16 @@ class ImageDecoder(ImageDecoderAbc, nn.Module):
 class VqVae(nn.Module):
     CODEBOOK_DIM = 8
     CODEBOOK_SIZE = 128
-
     LR = 2e-4
     ENCODER_ALPHA = 0.25
 
-    def __init__(self, in_channels=3) -> None:
+    def __init__(self, in_channels=3, codebook_size=128, codebook_dim=8) -> None:
         super().__init__()
-        self.encoder_ = ImageEncoder(self.CODEBOOK_DIM, in_channels=in_channels)
-        self.decoder_ = ImageDecoder(self.CODEBOOK_DIM)
-        self.quantizer_ = VectorQuantizer(dim_encodings=self.CODEBOOK_DIM, num_encodings=self.CODEBOOK_SIZE)
+        self.codebook_dimension = codebook_dim 
+        self.codebook_size_ = codebook_size
+        self.encoder_ = ImageEncoder(self.codebook_dimension, in_channels=in_channels)
+        self.decoder_ = ImageDecoder(self.codebook_dimension)
+        self.quantizer_ = VectorQuantizer(dim_encodings=self.codebook_dimension, num_encodings=self.codebook_size_)
 
     def fit(self, img_dataset: ImageDataset):
         pass # not used; check train phase_1 instead
@@ -643,18 +645,19 @@ class MLP(nn.Module):
         self.in_dims = in_dims
         self.out_width = out_width  # assuming squares
         self.out_dims = VqVae.CODEBOOK_DIM * self.out_width**2
-
-        self.fc1 = nn.Linear(self.in_dims, self.out_dims)
-        self.relu1 = nn.ReLU()
-        self.fc2 = nn.Linear(self.out_dims, self.out_dims)
+        self.fc1 = nn.Linear(self.in_dims, self.in_dims//2)
+        self.relu1 = nn.ReLU() 
+        self.fc2 = nn.Linear(self.in_dims//2, self.in_dims//10)
         self.relu2 = nn.ReLU()
+        self.fc3 = nn.Linear(self.in_dims//10, self.out_dims)
 
     def forward(self, x):
         x = x.view(-1, self.in_dims)
-        x = self.fc1(x)
+        x = self.fc1(x) 
         x = self.relu1(x)
         x = self.fc2(x)
         x = self.relu2(x)
+        x = self.fc3(x)
         return x.view(-1, VqVae.CODEBOOK_DIM, self.out_width, self.out_width)
 
 
@@ -690,6 +693,8 @@ class SuperResolutionModule(nn.Module, SuperResolutionAbc):  # Bahman
         self.resize_factor = resize_factor
         self.img_size = img_size
         self.down_scaled_size = [int(d/resize_factor) for d in img_size]
+        # TODO: we don't need this, not deleting it so that
+        # the state_dicts won't run into problems:
         self.vq_vae_fmri = vq_vae_fmri
         self.vq_vae_s = vq_vae_s
         self.vq_vae_l = vq_vae_l
@@ -705,8 +710,8 @@ class SuperResolutionModule(nn.Module, SuperResolutionAbc):  # Bahman
         z_ds, _ = self.vq_vae_s.encode(y_ds)
         z_sr = self.sr(z_ds)
         z_l = self.vq_vae_l.encoder_.encode(y)
-        z_l_q, z_l_q_idx = self.vq_vae_l.quantize(z_l)
-        z_sr_q, z_sr_q_idx = self.vq_vae_l.quantize(z_sr)
+        z_l_q, z_l_q_idx, _, _ = self.vq_vae_l.quantize(z_l)
+        z_sr_q, z_sr_q_idx, _, _ = self.vq_vae_l.quantize(z_sr)
         y_sr = self.vq_vae_l.decode(z_sr_q)
         y_l = self.vq_vae_l.decode(z_l)
         return y_l, z_l, z_l_q, z_l_q_idx , y_sr, z_sr, z_sr_q, z_sr_q_idx
@@ -714,6 +719,7 @@ class SuperResolutionModule(nn.Module, SuperResolutionAbc):  # Bahman
 
     def forward(self, x):
         x_mismatches = self.token_classifier(x)
+        # TODO: should only squeeze the channel dimension not batch (in case batch is 1)
         x_corrected = self.inpainting_network(x, torch.squeeze(x_mismatches))
         x_sr = self.sr(x_corrected)
         y_sr = self.vq_vae_l.decode(x_sr)
