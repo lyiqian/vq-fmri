@@ -160,14 +160,11 @@ After implementing with PyTorch, we first trained a VQ-VAE on ImageNet as all re
 \end{figure}
 
 
-\textbf{Qualitative results.}
-\todo
-
-As shown in \cref{decoded-imgs}, ...
+\textbf{Qualitative results.} \cref{decoded-imgs} shows some example images and their reconstructed instances. Comparing to the original stimulus on the top row, the fMRI decoded  images on the bottom row recovered some shape info. Color was off while brightness seemed reasonable.
 Comparing the last row of \cref{decoded-imgs} to the last column of original results in \cref{orig-figure}, they clearly had better color restoration and the outlines seemed smoother with more details.
 
 
-As a side note, our trained VQ-VAE did not produce as good results (\cref{decoded-imgs}, 2nd row) as in \cite{oordNeuralDiscreteRepresentation2018}.
+As a side note, our trained VQ-VAE did not produce as good results (\cref{decoded-imgs}, 2nd row) as in \cite{oordNeuralDiscreteRepresentation2018}. And this set the upper bound of how well fMRI representation could be decoded.
 
 
 \textbf{Quantitative results.}
