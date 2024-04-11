@@ -174,11 +174,6 @@ As a side note, our trained VQ-VAE did not produce as good results (\cref{decode
 
 \cref{metric-table} shows the comparison of evaluation metrics between the original results and our reproduction. ...
 
-\medskip
-
-Other than above evaluation results, we could confirm that shape info were learned before color and texture info over the course of training, as claimed in the paper.
-
-
 \begin{table}[b]
 \caption{Comparison of quantitative evaluation metrics.}
 \label{metric-table}
@@ -200,6 +195,12 @@ PCC     & 0.551 & TODO & $\times$ \\
 \end{center}
 \vskip -0.1in
 \end{table}
+
+
+\medskip
+
+Other than above evaluation results, we could confirm that shape info were learned before color and texture info over the course of training, as claimed in the paper.
+
 
 \subsection{Possible Reasons for Discrepancies}
 Although a good amount of details are provided in the paper, some critical information is not documented. The GOD fMRI dataset \cite{horikawa2016} has different formats of data, including raw fMRI recordings and pre-processed data. It was unclear which set of data the authors used to train the fMRI encoder. Another issue with the fMRI dataset was the inconsistency among subjects. There were five subjects but their data dimensions differed. We decided to use only one subject for our experiments.
