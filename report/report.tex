@@ -206,7 +206,7 @@ Although a good amount of details are provided in the paper, some critical infor
 
 As a result, our trained fMRI encoder did not seem able to reach a reasonable performance level. Yet, the performance of the fMRI encoder was also not detailed in the original paper. The image encoder and decoder of VQ-VAE, as noted previously, did not yield ideal results, either. As these two models are the upstream components in the VQ-fMRI framework, their underperformance, we believed, contributed to the discrepancies the most.
 
-Another detail missed in the paper is regarding one of the evaluation metrics, structural similarity index (SSIM). Unlike other pixel-level metrics, SSIM attempts to include neighbor info to evaluate the image reconstruction. The authors evaluated the models with SSIM, but did not mention the neighbor size of the metric. We decided to use a simple 3x3 neighbor.
+Another set of details missed in the paper is regarding evaluation metrics. The peak signal to noise ratio (PSNR), a pixel-level metric, is not defined in the selected paper nor in \cite{rakhimberdina2021natural}. So we use the definition from Wikipedia \cite{wiki:psnr}. Unlike other pixel-level metrics, structural similarity index (SSIM) attempts to include neighbor info to evaluate the image reconstruction. The authors evaluated the models with SSIM, but did not mention the neighbor size of the metric. We decided to use a simple 3x3 neighbor.
 
 
 %\subsection{Figures}
