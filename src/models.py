@@ -498,7 +498,7 @@ class ResBlock(nn.Module):
         return out
 
 
-EncoderConvBlock = UNetConvBlock
+# EncoderConvBlock = UNetConvBlock
 
 class DecoderConvBlock(nn.Module):
     def __init__(self, in_channels):
@@ -518,7 +518,7 @@ class DecoderConvBlock(nn.Module):
 class ImageEncoder(ImageEncoderAbc, nn.Module):
     def __init__(self, out_channels, in_channels=3) -> None:
         super().__init__()
-        self.conv_block = EncoderConvBlock(in_channels, out_channels, kernel_size=4, stride=2, padding=1)
+        self.conv_block = UNetConvBlock(in_channels, out_channels, kernel_size=4, stride=2, padding=1)
         self.res_block1 = ResBlock(out_channels, out_channels//2)
         self.res_block2 = ResBlock(out_channels, out_channels//2)
 
@@ -549,9 +549,9 @@ class ImageDecoder(ImageDecoderAbc, nn.Module):
         return self.forward(x)
 
 
-class VqVae(VqVaeAbc):
+class VqVae(nn.Module):
     CODEBOOK_DIM = 8
-    CODEBOOK_SIZE = 128
+    CODEBOOK_SIZE = 32
 
     LR = 2e-4
     ENCODER_ALPHA = 0.25
@@ -644,10 +644,11 @@ class MLP(nn.Module):
         self.out_width = out_width  # assuming squares
         self.out_dims = VqVae.CODEBOOK_DIM * self.out_width**2
 
-        self.fc1 = nn.Linear(self.in_dims, self.out_dims)
+        self.fc1 = nn.Linear(self.in_dims, self.in_dims//2)
         self.relu1 = nn.ReLU()
-        self.fc2 = nn.Linear(self.out_dims, self.out_dims)
+        self.fc2 = nn.Linear(self.in_dims//2, self.in_dims//10)
         self.relu2 = nn.ReLU()
+        self.fc3 = nn.Linear(self.in_dims//10, self.out_dims)
 
     def forward(self, x):
         x = x.view(-1, self.in_dims)
@@ -655,6 +656,7 @@ class MLP(nn.Module):
         x = self.relu1(x)
         x = self.fc2(x)
         x = self.relu2(x)
+        x = self.fc3(x)
         return x.view(-1, VqVae.CODEBOOK_DIM, self.out_width, self.out_width)
 
 

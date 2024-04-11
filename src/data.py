@@ -27,6 +27,7 @@ class GODDataset(Dataset):
         self.img_ids = pd.read_csv(df_path, header=None)
 
         subject_files = [p for p in data_dir.glob("*.h5")]
+        subject_files = [p for p in data_dir.glob("Subject1.h5")]
         fmri_data_stack = []
         image_id_stack = []
         for sf in subject_files:
@@ -66,15 +67,15 @@ class GODDataset(Dataset):
         fmri = self.fmri_data_all[idx]
         if self.image_transforms:
             image = self.image_transforms(image)
-        return image, fmri
+        return image, fmri.astype(np.float32)
 
 
 class GODLoader():
     def __init__(self, data_dir, batch_size=16) -> None:
         image_transforms = transforms.Compose([
-            transforms.Resize((512, 512)),      # Resize the image to 256x256 pixels
+            transforms.Resize((64, 64)),      # Resize the image to 64x64 pixels
             transforms.ToTensor(),              # Convert the image to a PyTorch tensor
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),  # Normalize with ImageNet stats
+            # transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),  # Normalize with ImageNet stats
         ])
         self.batch_size = batch_size
         self.train_loader = DataLoader(GODDataset(data_dir=data_dir, image_transforms=image_transforms, split='training'), batch_size=self.batch_size, shuffle=True)
@@ -87,59 +88,70 @@ class GODLoader():
         return self.test_loader
         
 
-# class ImageDataset(Dataset):
-#     """The 'train_cls' set of ImageNet containing 1.2M images.
-
-#     Also supports 'test' and 'val' sets."""
-#     def __init__(self, data_dir, image_transforms, split='train') -> None:
-#         self.data_dir = Path(data_dir)
-#         self.split = split
-#         self.image_transforms = image_transforms
-
-#         df_basepath = self.data_dir / 'ImageSets' / 'CLS-LOC'
-#         df_fname = f'{split}_cls.txt' if split == 'train' else f'{split}.txt'
-#         self.img_info = (
-#             pd.read_csv(df_basepath/df_fname, header=None, sep=' ')
-#                 .assign(path=lambda df: df[0].apply(self._format_img_path))
-#                 .set_index(1)
-#         )
-
-#     def __len__(self):
-#         return len(self.img_info)
-
-#     def __getitem__(self, idx):
-#         img_path = self.img_info.at[idx+1, 'path']
-#         image = read_image(img_path)
-
-#         if self.image_transforms:
-#             image = self.image_transforms(image)
-
-#         return image
-
-#     def _format_img_path(self, img_id):
-#         return str(self.data_dir/'Data'/'CLS-LOC'/self.split) + f'/{img_id}.JPEG'
-
-
 class ImageDataset(Dataset):
-    """Dummy class for testing purposes"""
+    """The 'train_cls' set of ImageNet containing 1.2M images.
+
+    Also supports 'test' and 'val' sets."""
     def __init__(self, data_dir, image_transforms, split='train') -> None:
-        super().__init__()
+        self.data_dir = Path(data_dir)
+        self.split = split
+        self.image_transforms = image_transforms
+
+        df_basepath = self.data_dir / 'ImageSets' / 'CLS-LOC'
+        df_fname = f'{split}_cls.txt' if split == 'train' else f'{split}.txt'
+        self.img_info = (
+            pd.read_csv(df_basepath/df_fname, header=None, sep=' ')
+                .assign(path=lambda df: df[0].apply(self._format_img_path))
+                .set_index(1)
+        )
 
     def __len__(self):
-        return 10
+        return len(self.img_info)
 
     def __getitem__(self, idx):
-        random_tensor = torch.rand(3, 128, 128)
-        return random_tensor
+        img_path = self.img_info.at[idx+1, 'path']
+        # image = read_image(img_path)
+        image = Image.open(img_path)
+        num_channels = len(image.getbands())
+        if num_channels == 1:
+            # image = torch.concat([image]*3)
+            image = image.convert('RGB')
+        if num_channels > 3:
+            # apparently there is a bug with the PIL so we need to convert image to RGBA first 
+            # before converting into RGB:
+            # https://stackoverflow.com/a/70191990/6411761
+            # https://stackoverflow.com/a/1963146/6411761
+            image = image.convert('RGBA').convert('RGB')
+        if self.image_transforms:
+            image = self.image_transforms(image)
+
+        return image
+
+    def _format_img_path(self, img_id):
+        return str(self.data_dir/'Data'/'CLS-LOC'/self.split) + f'/{img_id}.JPEG'
+
+
+# class ImageDataset(Dataset):
+#     """Dummy class for testing purposes"""
+#     def __init__(self, data_dir, image_transforms, split='train') -> None:
+#         super().__init__()
+
+#     def __len__(self):
+#         return 10
+
+#     def __getitem__(self, idx):
+#         random_tensor = torch.rand(3, 128, 128)
+#         return random_tensor
 
 class ImageLoader():
     def __init__(self, data_dir, batch_size=16) -> None:
         image_transforms = transforms.Compose([
+            transforms.Resize((256, 256)),      # Resize the image to 256x256 pixels
             transforms.ToTensor(),              # Convert the image to a PyTorch tensor
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),  # Normalize with ImageNet stats
         ])
         self.batch_size = batch_size
-        self.train_loader = DataLoader(ImageDataset(data_dir=data_dir, image_transforms=image_transforms, split='training'), batch_size=self.batch_size, shuffle=True)
+        self.train_loader = DataLoader(ImageDataset(data_dir=data_dir, image_transforms=image_transforms, split='train'), batch_size=self.batch_size, shuffle=True)
         self.test_loader = DataLoader(ImageDataset(data_dir=data_dir, image_transforms=image_transforms, split='test'), batch_size=self.batch_size, shuffle=False)
 
     def get_train_loader(self):
