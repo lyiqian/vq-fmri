@@ -134,14 +134,14 @@ def main():
 
     if args.phase == "inf":
         god_loader = GODLoader(data_dir=args.data_dir, batch_size=32)
-        # test_loader = god_loader.get_test_loader()
-        test_loader = god_loader.get_train_loader()
+        test_loader = god_loader.get_test_loader()
+        # test_loader = god_loader.get_train_loader()
         inference(test_loader, models_dir=args.model_dir)
 
     if args.phase == "inf_n":
         god_loader = GODLoader(data_dir=args.data_dir, batch_size=32)
-        # test_loader = god_loader.get_test_loader()
-        test_loader = god_loader.get_train_loader()
+        test_loader = god_loader.get_test_loader()
+        # test_loader = god_loader.get_train_loader()
         inference_no_sr(test_loader, models_dir=args.model_dir)
 
 
